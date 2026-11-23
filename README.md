@@ -1,23 +1,22 @@
-# Rahsaz — v0.4.0
+# Rahsaz — v0.5.0
 
 A bilingual (Persian/English), theme-switchable workspace for AI-assisted website creation.
 
-## What changed in 0.4.0 (Phase 2 – Smart Discovery)
+## What changed in 0.5.0 (Phase 3 – AI Assistant Layer)
 
-- **Discovery tab** inside every project workspace
-- **Structured questionnaire** with 8 guided questions (goal, audience, features, pages, content, design, constraints, success metrics)
-- **Progress bar** showing how many questions are answered
-- **Requirements summary** on the Overview tab
-- **Confirm & advance**: confirm requirements and automatically move the project to the Planning stage
-- Migration from v0.3.0 / v0.2.x data
+- **AI Assistant tab** inside every project workspace
+- **Prompt templates**: page structure, features, copy, tech stack, task breakdown, requirements review
+- **Context-aware prompts**: automatically include project name, type, stage, and discovery answers
+- **Copy prompt** → paste into ChatGPT / Claude / Grok / any AI tool
+- **Paste & save AI responses** as conversation history
+- **No API keys required** — fully local, provider-neutral workflow
+- Migration from v0.4.0 and earlier
 
-## Current scope
-- Persian/English + dark/light theme
-- Project create / open / edit / delete
-- Project Workspace with Overview, Discovery, Tasks, Settings
-- Simple task management
-- Structured requirements capture
-- Browser-local persistence
+## How the AI workflow works
+1. Pick a template or write a custom prompt
+2. Copy the generated prompt
+3. Paste it into any AI tool
+4. Copy the AI reply and save it back in Rahsaz
 
 ## Run locally
 ```bash
@@ -32,5 +31,5 @@ npm run preview
 ```
 
 ## Next phases
-- Phase 3: AI assistant integration layer
 - Phase 4: File & code management
+- Phase 5: Preview & quality checks

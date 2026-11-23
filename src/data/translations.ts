@@ -62,7 +62,7 @@ const fa = {
   statusArchived: 'بایگانی',
   statusCompleted: 'تکمیل‌شده',
   updatedAt: 'آخرین تغییر',
-  versionLabel: 'نسخه ۰.۴.۰',
+  versionLabel: 'نسخه ۰.۵.۰',
   openProject: 'باز کردن',
   backToProjects: 'بازگشت به پروژه‌ها',
   projectWorkspace: 'محیط پروژه',
@@ -87,8 +87,6 @@ const fa = {
   projectInfo: 'اطلاعات پروژه',
   changeStage: 'تغییر مرحله',
   changeStatus: 'تغییر وضعیت',
-
-  // Phase 2 — Discovery
   projectDiscovery: 'نیازسنجی',
   discoveryTitle: 'شناخت نیازها',
   discoverySubtitle: 'با پاسخ به چند سؤال، ایده خود را به مشخصات قابل اجرا تبدیل کن.',
@@ -117,6 +115,43 @@ const fa = {
   q_constraints_hint: 'مثلاً: بودجه کم، زمان محدود، نیاز به موبایل‌فرست بودن',
   q_success: 'موفقیت این وب‌سایت را چطور می‌سنجی؟',
   q_success_hint: 'مثلاً: تعداد بازدید، فروش، تماس‌های ورودی، ثبت‌نام',
+
+  // Phase 3 — AI
+  projectAi: 'دستیار هوشمند',
+  aiTitle: 'دستیار هوش مصنوعی',
+  aiSubtitle: 'پرامپت آماده را کپی کن، در هر ابزار AI استفاده کن و پاسخ را اینجا ذخیره کن.',
+  aiContext: 'زمینه پروژه',
+  aiTemplates: 'قالب‌های پرامپت',
+  aiHistory: 'تاریخچه مکالمات',
+  aiNoHistory: 'هنوز مکالمه‌ای ذخیره نشده.',
+  copyPrompt: 'کپی پرامپت',
+  promptCopied: 'پرامپت کپی شد',
+  pasteResponse: 'چسباندن پاسخ AI',
+  pastePlaceholder: 'پاسخ هوش مصنوعی را اینجا بچسبان...',
+  saveResponse: 'ذخیره پاسخ',
+  responseSaved: 'پاسخ ذخیره شد',
+  clearHistory: 'پاک کردن تاریخچه',
+  deleteMessage: 'حذف پیام',
+  tpl_structure: 'ساختار صفحات',
+  tpl_structure_desc: 'پیشنهاد ساختار صفحات و منوی سایت بر اساس نیازها',
+  tpl_features: 'فهرست قابلیت‌ها',
+  tpl_features_desc: 'اولویت‌بندی قابلیت‌های ضروری و اختیاری',
+  tpl_copy: 'متن و محتوا',
+  tpl_copy_desc: 'پیش‌نویس متن صفحه اصلی و بخش‌های کلیدی',
+  tpl_tech: 'پیشنهاد فنی',
+  tpl_tech_desc: 'پیشنهاد استک و معماری مناسب پروژه',
+  tpl_tasks: 'لیست وظایف',
+  tpl_tasks_desc: 'تبدیل نیازمندی‌ها به لیست وظایف قابل اجرا',
+  tpl_review: 'بازبینی نیازها',
+  tpl_review_desc: 'بررسی نقاط ضعف و پیشنهاد بهبود نیازسنجی',
+  aiHowItWorks: 'نحوه کار',
+  aiStep1: 'یک قالب پرامپت انتخاب کن یا پرامپت دلخواه بنویس',
+  aiStep2: 'پرامپت را کپی کن و در ChatGPT، Claude، Grok یا هر ابزار دیگری بچسبان',
+  aiStep3: 'پاسخ AI را کپی کن و اینجا ذخیره کن',
+  customPrompt: 'پرامپت سفارشی',
+  customPromptPlaceholder: 'پرامپت خودت را بنویس...',
+  buildPrompt: 'ساخت پرامپت',
+  noDiscoveryWarn: 'برای پرامپت دقیق‌تر، ابتدا نیازسنجی را تکمیل کن.',
 } as const
 
 const en = {
@@ -181,7 +216,7 @@ const en = {
   statusArchived: 'Archived',
   statusCompleted: 'Completed',
   updatedAt: 'Last updated',
-  versionLabel: 'Version 0.4.0',
+  versionLabel: 'Version 0.5.0',
   openProject: 'Open',
   backToProjects: 'Back to projects',
   projectWorkspace: 'Project workspace',
@@ -206,8 +241,6 @@ const en = {
   projectInfo: 'Project info',
   changeStage: 'Change stage',
   changeStatus: 'Change status',
-
-  // Phase 2 — Discovery
   projectDiscovery: 'Discovery',
   discoveryTitle: 'Discover requirements',
   discoverySubtitle: 'Answer a few questions to turn your idea into actionable specifications.',
@@ -236,6 +269,43 @@ const en = {
   q_constraints_hint: 'e.g. low budget, tight deadline, must be mobile-first',
   q_success: 'How will you measure success?',
   q_success_hint: 'e.g. visits, sales, inbound calls, sign-ups',
+
+  // Phase 3 — AI
+  projectAi: 'AI Assistant',
+  aiTitle: 'AI Assistant',
+  aiSubtitle: 'Copy a ready prompt, use any AI tool, then paste the response back here.',
+  aiContext: 'Project context',
+  aiTemplates: 'Prompt templates',
+  aiHistory: 'Conversation history',
+  aiNoHistory: 'No conversations saved yet.',
+  copyPrompt: 'Copy prompt',
+  promptCopied: 'Prompt copied',
+  pasteResponse: 'Paste AI response',
+  pastePlaceholder: 'Paste the AI response here...',
+  saveResponse: 'Save response',
+  responseSaved: 'Response saved',
+  clearHistory: 'Clear history',
+  deleteMessage: 'Delete message',
+  tpl_structure: 'Page structure',
+  tpl_structure_desc: 'Suggest page structure and navigation based on requirements',
+  tpl_features: 'Feature list',
+  tpl_features_desc: 'Prioritize essential vs optional features',
+  tpl_copy: 'Copy & content',
+  tpl_copy_desc: 'Draft homepage and key section text',
+  tpl_tech: 'Tech suggestion',
+  tpl_tech_desc: 'Recommend a suitable stack and architecture',
+  tpl_tasks: 'Task breakdown',
+  tpl_tasks_desc: 'Turn requirements into an actionable task list',
+  tpl_review: 'Requirements review',
+  tpl_review_desc: 'Review gaps and suggest improvements to discovery',
+  aiHowItWorks: 'How it works',
+  aiStep1: 'Pick a prompt template or write your own',
+  aiStep2: 'Copy the prompt and paste it into ChatGPT, Claude, Grok, or any AI tool',
+  aiStep3: 'Copy the AI reply and save it here',
+  customPrompt: 'Custom prompt',
+  customPromptPlaceholder: 'Write your own prompt...',
+  buildPrompt: 'Build prompt',
+  noDiscoveryWarn: 'For better prompts, complete Discovery first.',
 } as const
 
 export type TranslationKeys = {
@@ -246,16 +316,18 @@ export function getTranslations(language: Language): TranslationKeys {
   return language === 'fa' ? fa : en
 }
 
-/** Ordered list of discovery question ids */
 export const DISCOVERY_QUESTIONS = [
-  'q_goal',
-  'q_audience',
-  'q_features',
-  'q_pages',
-  'q_content',
-  'q_design',
-  'q_constraints',
-  'q_success',
+  'q_goal', 'q_audience', 'q_features', 'q_pages',
+  'q_content', 'q_design', 'q_constraints', 'q_success',
 ] as const
 
 export type DiscoveryQuestionId = (typeof DISCOVERY_QUESTIONS)[number]
+
+export const PROMPT_TEMPLATES = [
+  { id: 'structure', titleKey: 'tpl_structure', descriptionKey: 'tpl_structure_desc', stages: ['planning', 'design', 'discovery'] },
+  { id: 'features', titleKey: 'tpl_features', descriptionKey: 'tpl_features_desc', stages: ['discovery', 'planning'] },
+  { id: 'copy', titleKey: 'tpl_copy', descriptionKey: 'tpl_copy_desc', stages: ['design', 'development'] },
+  { id: 'tech', titleKey: 'tpl_tech', descriptionKey: 'tpl_tech_desc', stages: ['planning', 'development'] },
+  { id: 'tasks', titleKey: 'tpl_tasks', descriptionKey: 'tpl_tasks_desc', stages: ['planning', 'development'] },
+  { id: 'review', titleKey: 'tpl_review', descriptionKey: 'tpl_review_desc', stages: ['discovery', 'planning'] },
+] as const

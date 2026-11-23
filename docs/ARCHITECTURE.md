@@ -1,16 +1,16 @@
-# Rahsaz architecture — v0.4.0 (Phase 2 complete)
+# Rahsaz architecture — v0.5.0 (Phase 3 complete)
 
-## Phase 2 changes
-- DiscoveryData model (answers, notes, confirmed, updatedAt) attached to Project.
-- Discovery questionnaire with 8 standard questions + free notes.
-- Progress tracking and requirements summary view.
-- Confirm action advances project stage from discovery → planning.
-- Full migration from v0.3.0 and earlier storage keys.
+## Phase 3 changes
+- AiData / AiMessage models stored on each Project.
+- Provider-neutral AI workflow: build prompt → copy → external AI → paste response → save history.
+- Six built-in prompt templates with project context injection.
+- Custom prompt support.
+- Conversation history with delete and clear.
+- No API keys, no network calls from the app.
 
-## Acceptance criteria (Phase 2)
-- [x] User can answer structured discovery questions inside a project.
-- [x] Answers persist after refresh.
-- [x] Progress is visible (count + percentage).
-- [x] Requirements summary appears on Overview.
-- [x] Confirming requirements moves stage to Planning.
-- [x] Previous project data migrates cleanly.
+## Acceptance criteria (Phase 3)
+- [x] User can generate a context-aware prompt from templates.
+- [x] User can copy the prompt to clipboard.
+- [x] User can paste and save AI responses.
+- [x] History persists per project after refresh.
+- [x] Previous data migrates cleanly.

@@ -1,27 +1,17 @@
 /**
- * Core types for RahSaz v0.4.0 — Phase 2 (Smart Discovery)
+ * Core types for RahSaz v0.5.0 — Phase 3 (AI Assistant Layer)
  */
 
 export type Language = 'fa' | 'en'
 export type Theme = 'dark' | 'light'
 
 export type ProjectType =
-  | 'portfolio'
-  | 'business'
-  | 'store'
-  | 'education'
-  | 'blog'
-  | 'booking'
-  | 'community'
-  | 'webapp'
+  | 'portfolio' | 'business' | 'store' | 'education'
+  | 'blog' | 'booking' | 'community' | 'webapp'
 
 export type ProjectStage =
-  | 'discovery'
-  | 'planning'
-  | 'design'
-  | 'development'
-  | 'testing'
-  | 'published'
+  | 'discovery' | 'planning' | 'design'
+  | 'development' | 'testing' | 'published'
 
 export type ProjectStatus = 'active' | 'archived' | 'completed'
 
@@ -32,20 +22,31 @@ export interface Task {
   createdAt: string
 }
 
-/** Single answer in the discovery questionnaire */
 export interface DiscoveryAnswer {
   questionId: string
   value: string
 }
 
-/** Full discovery / requirements data for a project */
 export interface DiscoveryData {
   answers: DiscoveryAnswer[]
-  /** Free-text notes from the user */
   notes: string
-  /** Whether the user has confirmed the requirements */
   confirmed: boolean
-  /** ISO timestamp of last update */
+  updatedAt: string
+}
+
+/** One message in the AI conversation log */
+export interface AiMessage {
+  id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  /** Optional label e.g. "Page structure", "Copy prompt" */
+  label?: string
+  createdAt: string
+}
+
+/** AI workspace data stored on the project */
+export interface AiData {
+  messages: AiMessage[]
   updatedAt: string
 }
 
@@ -60,10 +61,19 @@ export interface Project {
   status: ProjectStatus
   language?: Language
   tasks?: Task[]
-  /** Phase 2: structured discovery answers */
   discovery?: DiscoveryData
+  ai?: AiData
 }
 
 export type StorageResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string }
+
+/** Built-in prompt template */
+export interface PromptTemplate {
+  id: string
+  titleKey: string
+  descriptionKey: string
+  /** Stage this template is most useful for */
+  stages: ProjectStage[]
+}

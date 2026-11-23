@@ -3,31 +3,103 @@ import {
   Compass, FolderKanban, BookOpen, Settings, Plus, Sun, Moon,
   Languages, Sparkles, ArrowUpLeft, Trash2, X, Layers3,
   WandSparkles, Code2, Rocket, PanelLeftClose, AlertTriangle,
-  CheckCircle2, Circle, ListTodo, Info, ChevronLeft, ClipboardList
+  CheckCircle2, Circle, ListTodo, Info, ChevronLeft, ClipboardList,
+  Bot, Copy, Check, MessageSquare
 } from 'lucide-react'
-import type { Language, Project, ProjectType, ProjectStage, ProjectStatus, Theme, Task, DiscoveryData, DiscoveryAnswer } from './types'
-import { getTranslations, type TranslationKeys, DISCOVERY_QUESTIONS } from './data/translations'
+import type {
+  Language, Project, ProjectType, ProjectStage, ProjectStatus,
+  Theme, Task, DiscoveryData, DiscoveryAnswer, AiData, AiMessage
+} from './types'
 import {
-  loadProjects,
-  createProject as storageCreate,
-  deleteProject as storageDelete,
-  updateProject as storageUpdate,
-  storageInfo,
+  getTranslations, type TranslationKeys, DISCOVERY_QUESTIONS, PROMPT_TEMPLATES
+} from './data/translations'
+import {
+  loadProjects, createProject as storageCreate,
+  deleteProject as storageDelete, updateProject as storageUpdate, storageInfo,
 } from './storage'
 
 const projectTypes: ProjectType[] = [
   'portfolio', 'business', 'store', 'education',
   'blog', 'booking', 'community', 'webapp'
 ]
-
 const stages: ProjectStage[] = [
   'discovery', 'planning', 'design', 'development', 'testing', 'published'
 ]
-
 const statuses: ProjectStatus[] = ['active', 'archived', 'completed']
 
 type PageId = 'overview' | 'projects' | 'guide' | 'settings'
-type WorkspaceTab = 'overview' | 'discovery' | 'tasks' | 'settings'
+type WorkspaceTab = 'overview' | 'discovery' | 'ai' | 'tasks' | 'settings'
+
+/** Build a context block from project + discovery */
+function buildProjectContext(project: Project, t: TranslationKeys, isFa: boolean): string {
+  const lines: string[] = []
+  lines.push(isFa ? `نام پروژه: ${project.name}` : `Project name: ${project.name}`)
+  lines.push(isFa ? `نوع: ${t[project.type]}` : `Type: ${t[project.type]}`)
+  if (project.description) {
+    lines.push(isFa ? `توضیح: ${project.description}` : `Description: ${project.description}`)
+  }
+  lines.push(isFa ? `مرحله فعلی: ${t[project.stage]}` : `Current stage: ${t[project.stage]}`)
+
+  const answers = project.discovery?.answers || []
+  if (answers.length > 0) {
+    lines.push('')
+    lines.push(isFa ? '--- پاسخ‌های نیازسنجی ---' : '--- Discovery answers ---')
+    for (const a of answers) {
+      const qLabel = t[a.questionId as keyof TranslationKeys] || a.questionId
+      lines.push(`${qLabel}`)
+      lines.push(`  → ${a.value}`)
+    }
+  }
+  if (project.discovery?.notes) {
+    lines.push('')
+    lines.push(isFa ? `یادداشت‌ها: ${project.discovery.notes}` : `Notes: ${project.discovery.notes}`)
+  }
+  return lines.join('\n')
+}
+
+function buildPromptFromTemplate(
+  templateId: string,
+  project: Project,
+  t: TranslationKeys,
+  isFa: boolean
+): string {
+  const ctx = buildProjectContext(project, t, isFa)
+  const header = isFa
+    ? 'تو یک مشاور حرفه‌ای طراحی و توسعه وب‌سایت هستی. بر اساس اطلاعات پروژه زیر پاسخ بده.\n\n'
+    : 'You are a professional website design and development consultant. Answer based on the project information below.\n\n'
+
+  const instructions: Record<string, { fa: string; en: string }> = {
+    structure: {
+      fa: 'ساختار صفحات و منوی پیشنهادی این وب‌سایت را به‌صورت فهرست واضح بنویس. برای هر صفحه یک جمله توضیح بده.',
+      en: 'Propose a clear page structure and navigation for this website. Add a one-sentence description for each page.',
+    },
+    features: {
+      fa: 'قابلیت‌های ضروری و اختیاری را در دو فهرست جداگانه اولویت‌بندی کن و دلیل هر مورد را کوتاه بنویس.',
+      en: 'List essential vs optional features in two separate prioritized lists and briefly justify each item.',
+    },
+    copy: {
+      fa: 'پیش‌نویس متن صفحه اصلی (عنوان، زیرعنوان، بخش‌های اصلی) را به زبان فارسی و لحن مناسب مخاطب بنویس.',
+      en: 'Draft homepage copy (headline, subheadline, main sections) in a tone suitable for the audience.',
+    },
+    tech: {
+      fa: 'یک استک فنی مناسب (frontend، backend در صورت نیاز، میزبانی) پیشنهاد بده و دلیل انتخاب را توضیح بده. سطح پیچیدگی را با محدودیت‌های پروژه هماهنگ کن.',
+      en: 'Suggest a suitable tech stack (frontend, backend if needed, hosting) and explain why. Match complexity to project constraints.',
+    },
+    tasks: {
+      fa: 'نیازمندی‌ها را به یک لیست وظایف قابل اجرا و اولویت‌بندی‌شده تبدیل کن (حداکثر ۱۵ مورد).',
+      en: 'Turn the requirements into a prioritized, actionable task list (max 15 items).',
+    },
+    review: {
+      fa: 'نقاط ضعف یا کمبود اطلاعات در نیازسنجی را مشخص کن و ۳ تا ۵ سؤال تکمیلی پیشنهاد بده.',
+      en: 'Identify gaps in the discovery answers and suggest 3–5 follow-up questions.',
+    },
+  }
+
+  const instr = instructions[templateId]
+  const body = instr ? (isFa ? instr.fa : instr.en) : (isFa ? 'بر اساس اطلاعات پروژه راهنمایی کن.' : 'Provide guidance based on the project information.')
+
+  return `${header}${ctx}\n\n---\n\n${body}`
+}
 
 export default function App() {
   const [language, setLanguage] = useState<Language>(
@@ -48,7 +120,6 @@ export default function App() {
   const [formError, setFormError] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null)
 
-  // Workspace
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('overview')
   const [editName, setEditName] = useState('')
@@ -59,9 +130,16 @@ export default function App() {
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [saveMessage, setSaveMessage] = useState('')
 
-  // Discovery local state
+  // Discovery
   const [discAnswers, setDiscAnswers] = useState<Record<string, string>>({})
   const [discNotes, setDiscNotes] = useState('')
+
+  // AI
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('structure')
+  const [customPrompt, setCustomPrompt] = useState('')
+  const [generatedPrompt, setGeneratedPrompt] = useState('')
+  const [pasteText, setPasteText] = useState('')
+  const [copied, setCopied] = useState(false)
 
   const t = useMemo(() => getTranslations(language), [language])
   const isFa = language === 'fa'
@@ -73,13 +151,8 @@ export default function App() {
 
   useEffect(() => {
     const result = loadProjects()
-    if (result.ok) {
-      setProjects(result.data)
-      setStorageError(null)
-    } else {
-      setStorageError(result.error)
-      setProjects([])
-    }
+    if (result.ok) { setProjects(result.data); setStorageError(null) }
+    else { setStorageError(result.error); setProjects([]) }
     setStorageReady(true)
   }, [])
 
@@ -104,13 +177,15 @@ export default function App() {
     setEditStatus(project.status)
     setSaveMessage('')
     setNewTaskTitle('')
-    // Load discovery answers into local state
     const map: Record<string, string> = {}
-    for (const a of project.discovery?.answers || []) {
-      map[a.questionId] = a.value
-    }
+    for (const a of project.discovery?.answers || []) map[a.questionId] = a.value
     setDiscAnswers(map)
     setDiscNotes(project.discovery?.notes || '')
+    setSelectedTemplate('structure')
+    setCustomPrompt('')
+    setGeneratedPrompt('')
+    setPasteText('')
+    setCopied(false)
   }, [])
 
   const closeProject = useCallback(() => {
@@ -123,24 +198,16 @@ export default function App() {
     const result = storageCreate({ name, type, description }, projects)
     if (!result.ok) {
       if (result.error === 'EMPTY_NAME') setFormError(t.emptyName)
-      else {
-        setFormError(t.storageError)
-        setStorageError(result.error)
-      }
+      else { setFormError(t.storageError); setStorageError(result.error) }
       return
     }
     setProjects(result.data)
-    setName('')
-    setDescription('')
-    setType('portfolio')
-    setShowCreate(false)
+    setName(''); setDescription(''); setType('portfolio'); setShowCreate(false)
     const created = result.data[0]
     if (created) openProject(created)
   }, [name, type, description, projects, t, openProject])
 
-  const requestDelete = useCallback((project: Project) => {
-    setDeleteTarget(project)
-  }, [])
+  const requestDelete = useCallback((project: Project) => setDeleteTarget(project), [])
 
   const confirmDelete = useCallback(() => {
     if (!deleteTarget) return
@@ -149,10 +216,7 @@ export default function App() {
       setProjects(result.data)
       if (activeProjectId === deleteTarget.id) setActiveProjectId(null)
       setDeleteTarget(null)
-    } else {
-      setStorageError(result.error)
-      setDeleteTarget(null)
-    }
+    } else { setStorageError(result.error); setDeleteTarget(null) }
   }, [deleteTarget, projects, activeProjectId])
 
   const handleSaveProject = useCallback(() => {
@@ -174,25 +238,16 @@ export default function App() {
 
   const handleAddTask = useCallback(() => {
     if (!activeProject || !newTaskTitle.trim()) return
-    const task: Task = {
-      id: crypto.randomUUID(),
-      title: newTaskTitle.trim(),
-      done: false,
-      createdAt: new Date().toISOString(),
-    }
+    const task: Task = { id: crypto.randomUUID(), title: newTaskTitle.trim(), done: false, createdAt: new Date().toISOString() }
     const tasks = [...(activeProject.tasks || []), task]
     const result = storageUpdate(activeProject.id, { tasks }, projects)
-    if (result.ok) {
-      setProjects(result.data)
-      setNewTaskTitle('')
-    } else setStorageError(result.error)
+    if (result.ok) { setProjects(result.data); setNewTaskTitle('') }
+    else setStorageError(result.error)
   }, [activeProject, newTaskTitle, projects])
 
   const handleToggleTask = useCallback((taskId: string) => {
     if (!activeProject) return
-    const tasks = (activeProject.tasks || []).map(tk =>
-      tk.id === taskId ? { ...tk, done: !tk.done } : tk
-    )
+    const tasks = (activeProject.tasks || []).map(tk => tk.id === taskId ? { ...tk, done: !tk.done } : tk)
     const result = storageUpdate(activeProject.id, { tasks }, projects)
     if (result.ok) setProjects(result.data)
     else setStorageError(result.error)
@@ -210,12 +265,7 @@ export default function App() {
     const answers: DiscoveryAnswer[] = DISCOVERY_QUESTIONS
       .filter(qid => (discAnswers[qid] || '').trim())
       .map(qid => ({ questionId: qid, value: discAnswers[qid].trim() }))
-    return {
-      answers,
-      notes: discNotes.trim(),
-      confirmed,
-      updatedAt: new Date().toISOString(),
-    }
+    return { answers, notes: discNotes.trim(), confirmed, updatedAt: new Date().toISOString() }
   }, [discAnswers, discNotes])
 
   const handleSaveDiscovery = useCallback(() => {
@@ -232,11 +282,7 @@ export default function App() {
   const handleConfirmDiscovery = useCallback(() => {
     if (!activeProject) return
     const discovery = buildDiscoveryData(true)
-    const result = storageUpdate(
-      activeProject.id,
-      { discovery, stage: 'planning' },
-      projects
-    )
+    const result = storageUpdate(activeProject.id, { discovery, stage: 'planning' }, projects)
     if (result.ok) {
       setProjects(result.data)
       setEditStage('planning')
@@ -245,6 +291,87 @@ export default function App() {
       setWorkspaceTab('overview')
     } else setStorageError(result.error)
   }, [activeProject, buildDiscoveryData, projects, t])
+
+  // AI handlers
+  const handleBuildPrompt = useCallback(() => {
+    if (!activeProject) return
+    if (customPrompt.trim()) {
+      const ctx = buildProjectContext(activeProject, t, isFa)
+      const header = isFa
+        ? 'تو یک مشاور حرفه‌ای طراحی و توسعه وب‌سایت هستی. بر اساس اطلاعات پروژه زیر پاسخ بده.\n\n'
+        : 'You are a professional website design and development consultant. Answer based on the project information below.\n\n'
+      setGeneratedPrompt(`${header}${ctx}\n\n---\n\n${customPrompt.trim()}`)
+    } else {
+      setGeneratedPrompt(buildPromptFromTemplate(selectedTemplate, activeProject, t, isFa))
+    }
+  }, [activeProject, selectedTemplate, customPrompt, t, isFa])
+
+  const handleCopyPrompt = useCallback(async () => {
+    if (!generatedPrompt) handleBuildPrompt()
+    const text = generatedPrompt || (activeProject
+      ? buildPromptFromTemplate(selectedTemplate, activeProject, t, isFa)
+      : '')
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+      // Also save as user message in history
+      if (activeProject) {
+        const msg: AiMessage = {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: text,
+          label: customPrompt.trim()
+            ? t.customPrompt
+            : t[PROMPT_TEMPLATES.find(p => p.id === selectedTemplate)?.titleKey as keyof TranslationKeys] || selectedTemplate,
+          createdAt: new Date().toISOString(),
+        }
+        const messages = [...(activeProject.ai?.messages || []), msg]
+        const ai: AiData = { messages, updatedAt: new Date().toISOString() }
+        const result = storageUpdate(activeProject.id, { ai }, projects)
+        if (result.ok) setProjects(result.data)
+      }
+    } catch {
+      // fallback: select text
+    }
+  }, [generatedPrompt, handleBuildPrompt, activeProject, selectedTemplate, customPrompt, t, isFa, projects])
+
+  const handleSaveResponse = useCallback(() => {
+    if (!activeProject || !pasteText.trim()) return
+    const msg: AiMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: pasteText.trim(),
+      createdAt: new Date().toISOString(),
+    }
+    const messages = [...(activeProject.ai?.messages || []), msg]
+    const ai: AiData = { messages, updatedAt: new Date().toISOString() }
+    const result = storageUpdate(activeProject.id, { ai }, projects)
+    if (result.ok) {
+      setProjects(result.data)
+      setPasteText('')
+      setSaveMessage(t.responseSaved)
+      setTimeout(() => setSaveMessage(''), 2500)
+    } else setStorageError(result.error)
+  }, [activeProject, pasteText, projects, t])
+
+  const handleDeleteMessage = useCallback((msgId: string) => {
+    if (!activeProject) return
+    const messages = (activeProject.ai?.messages || []).filter(m => m.id !== msgId)
+    const ai: AiData = { messages, updatedAt: new Date().toISOString() }
+    const result = storageUpdate(activeProject.id, { ai }, projects)
+    if (result.ok) setProjects(result.data)
+    else setStorageError(result.error)
+  }, [activeProject, projects])
+
+  const handleClearHistory = useCallback(() => {
+    if (!activeProject) return
+    const ai: AiData = { messages: [], updatedAt: new Date().toISOString() }
+    const result = storageUpdate(activeProject.id, { ai }, projects)
+    if (result.ok) setProjects(result.data)
+    else setStorageError(result.error)
+  }, [activeProject, projects])
 
   const nav = [
     { id: 'overview' as const, label: t.overview, icon: Compass },
@@ -266,10 +393,10 @@ export default function App() {
     const tasks = activeProject.tasks || []
     const doneCount = tasks.filter(tk => tk.done).length
     const progressPct = tasks.length === 0 ? 0 : Math.round((doneCount / tasks.length) * 100)
-
     const answeredCount = DISCOVERY_QUESTIONS.filter(qid => (discAnswers[qid] || '').trim()).length
     const discoveryPct = Math.round((answeredCount / DISCOVERY_QUESTIONS.length) * 100)
     const isConfirmed = activeProject.discovery?.confirmed
+    const aiMessages = activeProject.ai?.messages || []
 
     return (
       <div className="app-shell">
@@ -292,6 +419,7 @@ export default function App() {
             {[
               { id: 'overview' as const, label: t.projectOverview, icon: Info },
               { id: 'discovery' as const, label: t.projectDiscovery, icon: ClipboardList },
+              { id: 'ai' as const, label: t.projectAi, icon: Bot },
               { id: 'tasks' as const, label: t.projectTasks, icon: ListTodo },
               { id: 'settings' as const, label: t.projectSettings, icon: Settings },
             ].map(item => {
@@ -326,6 +454,7 @@ export default function App() {
               <span>
                 {workspaceTab === 'overview' ? t.projectOverview
                   : workspaceTab === 'discovery' ? t.projectDiscovery
+                  : workspaceTab === 'ai' ? t.projectAi
                   : workspaceTab === 'tasks' ? t.projectTasks
                   : t.projectSettings}
               </span>
@@ -367,7 +496,6 @@ export default function App() {
                   <div className="stat-card">
                     <span>{t.stage}</span>
                     <strong style={{ fontSize: 16 }}>{t[activeProject.stage]}</strong>
-                    <small>{t.changeStage}</small>
                   </div>
                   <div className="stat-card">
                     <span>{t.discoveryProgress}</span>
@@ -385,7 +513,6 @@ export default function App() {
                   <div className="section-heading">
                     <div>
                       <h2>{t.howItWorks}</h2>
-                      <p>{isFa ? 'مرحله فعلی پروژه مشخص شده است' : 'Current project stage is highlighted'}</p>
                     </div>
                   </div>
                   <div className="steps-grid">
@@ -405,7 +532,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Requirements summary if any answers exist */}
                 {answeredCount > 0 && (
                   <div className="section-block" style={{ marginTop: 28 }}>
                     <div className="section-heading">
@@ -479,13 +605,10 @@ export default function App() {
                       />
                     </label>
                   ))}
-
                   <label className="discovery-question">
                     <div className="dq-header">
                       <span className="dq-num">+</span>
-                      <div>
-                        <strong>{t.discoveryNotes}</strong>
-                      </div>
+                      <div><strong>{t.discoveryNotes}</strong></div>
                     </div>
                     <textarea
                       value={discNotes}
@@ -497,18 +620,138 @@ export default function App() {
                 </div>
 
                 <div className="discovery-actions">
-                  <button className="secondary-button" onClick={handleSaveDiscovery}>
-                    {t.saveDiscovery}
-                  </button>
+                  <button className="secondary-button" onClick={handleSaveDiscovery}>{t.saveDiscovery}</button>
                   <button
                     className="primary-button"
                     onClick={handleConfirmDiscovery}
                     disabled={answeredCount < 3}
-                    title={answeredCount < 3 ? (isFa ? 'حداقل ۳ سؤال را پاسخ بده' : 'Answer at least 3 questions') : undefined}
                   >
                     <CheckCircle2 size={16} />
                     {t.confirmRequirements}
                   </button>
+                </div>
+              </section>
+            )}
+
+            {/* AI ASSISTANT */}
+            {workspaceTab === 'ai' && (
+              <section className="page-section">
+                <div className="page-title-row">
+                  <div>
+                    <div className="eyebrow">{t.projectAi}</div>
+                    <h1>{t.aiTitle}</h1>
+                    <p style={{ color: 'var(--muted)' }}>{t.aiSubtitle}</p>
+                  </div>
+                  {saveMessage && <span className="save-toast">{saveMessage}</span>}
+                </div>
+
+                {answeredCount === 0 && (
+                  <div className="ai-warn">
+                    <AlertTriangle size={16} />
+                    <span>{t.noDiscoveryWarn}</span>
+                  </div>
+                )}
+
+                <div className="ai-how">
+                  <strong>{t.aiHowItWorks}</strong>
+                  <ol>
+                    <li>{t.aiStep1}</li>
+                    <li>{t.aiStep2}</li>
+                    <li>{t.aiStep3}</li>
+                  </ol>
+                </div>
+
+                <div className="ai-layout">
+                  <div className="ai-col">
+                    <h3>{t.aiTemplates}</h3>
+                    <div className="template-list">
+                      {PROMPT_TEMPLATES.map(tpl => (
+                        <button
+                          key={tpl.id}
+                          className={`template-card ${selectedTemplate === tpl.id && !customPrompt ? 'selected' : ''}`}
+                          onClick={() => { setSelectedTemplate(tpl.id); setCustomPrompt(''); setGeneratedPrompt('') }}
+                        >
+                          <strong>{t[tpl.titleKey as keyof TranslationKeys]}</strong>
+                          <small>{t[tpl.descriptionKey as keyof TranslationKeys]}</small>
+                        </button>
+                      ))}
+                    </div>
+
+                    <label className="ai-custom">
+                      <span>{t.customPrompt}</span>
+                      <textarea
+                        value={customPrompt}
+                        onChange={e => { setCustomPrompt(e.target.value); setGeneratedPrompt('') }}
+                        rows={3}
+                        placeholder={t.customPromptPlaceholder}
+                      />
+                    </label>
+
+                    <div className="ai-actions">
+                      <button className="secondary-button" onClick={handleBuildPrompt}>{t.buildPrompt}</button>
+                      <button className="primary-button" onClick={handleCopyPrompt}>
+                        {copied ? <Check size={16} /> : <Copy size={16} />}
+                        {copied ? t.promptCopied : t.copyPrompt}
+                      </button>
+                    </div>
+
+                    {generatedPrompt && (
+                      <pre className="prompt-preview">{generatedPrompt}</pre>
+                    )}
+                  </div>
+
+                  <div className="ai-col">
+                    <h3>{t.pasteResponse}</h3>
+                    <textarea
+                      className="paste-area"
+                      value={pasteText}
+                      onChange={e => setPasteText(e.target.value)}
+                      rows={8}
+                      placeholder={t.pastePlaceholder}
+                    />
+                    <button
+                      className="primary-button"
+                      onClick={handleSaveResponse}
+                      disabled={!pasteText.trim()}
+                      style={{ marginTop: 10 }}
+                    >
+                      {t.saveResponse}
+                    </button>
+
+                    <div className="ai-history-header">
+                      <h3>{t.aiHistory}</h3>
+                      {aiMessages.length > 0 && (
+                        <button className="text-button" onClick={handleClearHistory}>{t.clearHistory}</button>
+                      )}
+                    </div>
+
+                    {aiMessages.length === 0 ? (
+                      <div className="empty-state" style={{ marginTop: 12 }}>
+                        <div className="empty-icon"><MessageSquare size={22} /></div>
+                        <strong>{t.aiNoHistory}</strong>
+                      </div>
+                    ) : (
+                      <div className="ai-messages">
+                        {[...aiMessages].reverse().map(msg => (
+                          <div key={msg.id} className={`ai-msg ai-msg-${msg.role}`}>
+                            <div className="ai-msg-head">
+                              <span className="ai-msg-role">
+                                {msg.role === 'user' ? (isFa ? 'پرامپت' : 'Prompt') : (isFa ? 'پاسخ AI' : 'AI reply')}
+                                {msg.label ? ` · ${msg.label}` : ''}
+                              </span>
+                              <button className="delete-button" onClick={() => handleDeleteMessage(msg.id)} title={t.deleteMessage}>
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                            <pre className="ai-msg-body">{msg.content}</pre>
+                            <small className="ai-msg-time">
+                              {new Date(msg.createdAt).toLocaleString(isFa ? 'fa-IR' : 'en-US')}
+                            </small>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </section>
             )}
@@ -520,12 +763,9 @@ export default function App() {
                   <div>
                     <div className="eyebrow">{t.projectTasks}</div>
                     <h1>{t.projectTasks}</h1>
-                    <p style={{ color: 'var(--muted)' }}>
-                      {doneCount} / {tasks.length} {t.tasksCompleted}
-                    </p>
+                    <p style={{ color: 'var(--muted)' }}>{doneCount} / {tasks.length} {t.tasksCompleted}</p>
                   </div>
                 </div>
-
                 <div className="task-add-row">
                   <input
                     type="text"
@@ -535,11 +775,9 @@ export default function App() {
                     onKeyDown={e => { if (e.key === 'Enter') handleAddTask() }}
                   />
                   <button className="primary-button" onClick={handleAddTask} disabled={!newTaskTitle.trim()}>
-                    <Plus size={16} />
-                    {t.addTask}
+                    <Plus size={16} />{t.addTask}
                   </button>
                 </div>
-
                 {tasks.length === 0 ? (
                   <div className="empty-state" style={{ marginTop: 32 }}>
                     <div className="empty-icon"><ListTodo size={25} /></div>
@@ -549,11 +787,11 @@ export default function App() {
                   <div className="task-list">
                     {tasks.map(task => (
                       <div key={task.id} className={`task-item ${task.done ? 'done' : ''}`}>
-                        <button className="task-check" onClick={() => handleToggleTask(task.id)} aria-label={task.done ? t.taskDone : t.taskPending}>
+                        <button className="task-check" onClick={() => handleToggleTask(task.id)}>
                           {task.done ? <CheckCircle2 size={20} /> : <Circle size={20} />}
                         </button>
                         <span className="task-title">{task.title}</span>
-                        <button className="delete-button" onClick={() => handleDeleteTask(task.id)} title={t.deleteTask} aria-label={t.deleteTask}>
+                        <button className="delete-button" onClick={() => handleDeleteTask(task.id)}>
                           <Trash2 size={15} />
                         </button>
                       </div>
@@ -573,7 +811,6 @@ export default function App() {
                   </div>
                   {saveMessage && <span className="save-toast">{saveMessage}</span>}
                 </div>
-
                 <div className="settings-form">
                   <label>
                     <span>{t.projectName}</span>
@@ -586,17 +823,13 @@ export default function App() {
                   <label>
                     <span>{t.projectType}</span>
                     <select value={editType} onChange={e => setEditType(e.target.value as ProjectType)}>
-                      {projectTypes.map(pt => (
-                        <option key={pt} value={pt}>{t[pt]}</option>
-                      ))}
+                      {projectTypes.map(pt => <option key={pt} value={pt}>{t[pt]}</option>)}
                     </select>
                   </label>
                   <label>
                     <span>{t.stage}</span>
                     <select value={editStage} onChange={e => setEditStage(e.target.value as ProjectStage)}>
-                      {stages.map(s => (
-                        <option key={s} value={s}>{t[s]}</option>
-                      ))}
+                      {stages.map(s => <option key={s} value={s}>{t[s]}</option>)}
                     </select>
                   </label>
                   <label>
@@ -610,9 +843,7 @@ export default function App() {
                     </select>
                   </label>
                   <div className="modal-actions" style={{ justifyContent: 'flex-start', marginTop: 12 }}>
-                    <button className="primary-button" onClick={handleSaveProject}>
-                      {t.saveChanges}
-                    </button>
+                    <button className="primary-button" onClick={handleSaveProject}>{t.saveChanges}</button>
                   </div>
                 </div>
               </section>
@@ -623,7 +854,7 @@ export default function App() {
     )
   }
 
-  // ========== MAIN DASHBOARD ==========
+  // ========== MAIN DASHBOARD (same as before) ==========
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -634,27 +865,20 @@ export default function App() {
             <div className="brand-caption">WEBSITE CREATION STUDIO</div>
           </div>
         </div>
-
         <button className="new-project-button" onClick={() => setShowCreate(true)}>
           <Plus size={18} />{t.newProject}
         </button>
-
         <div className="nav-label">{isFa ? 'فضای کاری' : 'WORKSPACE'}</div>
         <nav className="nav-list">
           {nav.map(item => {
             const Icon = item.icon
             return (
-              <button
-                key={item.id}
-                className={`nav-item ${activePage === item.id ? 'active' : ''}`}
-                onClick={() => setActivePage(item.id)}
-              >
+              <button key={item.id} className={`nav-item ${activePage === item.id ? 'active' : ''}`} onClick={() => setActivePage(item.id)}>
                 <Icon size={18} /><span>{item.label}</span>
               </button>
             )
           })}
         </nav>
-
         <div className="sidebar-bottom">
           <div className="help-card">
             <Sparkles size={18} />
@@ -696,7 +920,7 @@ export default function App() {
           <div className="storage-error-banner" role="alert">
             <AlertTriangle size={16} />
             <span>{t.storageError}</span>
-            <button onClick={() => setStorageError(null)} aria-label="Dismiss">×</button>
+            <button onClick={() => setStorageError(null)}>×</button>
           </div>
         )}
 
@@ -705,10 +929,7 @@ export default function App() {
             <>
               <section className="hero">
                 <div className="hero-copy">
-                  <div className="eyebrow">
-                    <Sparkles size={15} />
-                    {isFa ? 'فضای ساخت وب‌سایت با هوش مصنوعی' : 'AI-ASSISTED WEBSITE WORKSPACE'}
-                  </div>
+                  <div className="eyebrow"><Sparkles size={15} />{isFa ? 'فضای ساخت وب‌سایت با هوش مصنوعی' : 'AI-ASSISTED WEBSITE WORKSPACE'}</div>
                   <h1>{t.welcome}</h1>
                   <p>{t.welcomeText}</p>
                   <button className="primary-button" onClick={() => setShowCreate(true)}>
@@ -719,42 +940,17 @@ export default function App() {
                   <div className="orbit orbit-one" />
                   <div className="orbit orbit-two" />
                   <div className="art-core"><WandSparkles size={38} /></div>
-                  <div className="float-card float-top">
-                    <Layers3 size={17} />
-                    <span>{isFa ? 'معماری پروژه' : 'Project architecture'}</span>
-                  </div>
-                  <div className="float-card float-bottom">
-                    <Code2 size={17} />
-                    <span>{isFa ? 'توسعه گام‌به‌گام' : 'Step-by-step build'}</span>
-                  </div>
+                  <div className="float-card float-top"><Layers3 size={17} /><span>{isFa ? 'معماری پروژه' : 'Project architecture'}</span></div>
+                  <div className="float-card float-bottom"><Code2 size={17} /><span>{isFa ? 'توسعه گام‌به‌گام' : 'Step-by-step build'}</span></div>
                 </div>
               </section>
-
               <section className="stats-grid">
-                <div className="stat-card">
-                  <span>{t.projectCount}</span>
-                  <strong>{projects.length.toLocaleString(isFa ? 'fa-IR' : 'en-US')}</strong>
-                  <small>{isFa ? 'در فضای کاری فعلی' : 'In this workspace'}</small>
-                </div>
-                <div className="stat-card">
-                  <span>{isFa ? 'روش کار' : 'Workflow'}</span>
-                  <strong>{isFa ? 'ترکیبی' : 'Hybrid'}</strong>
-                  <small>{isFa ? 'راهنمایی + کنترل حرفه‌ای' : 'Guidance + advanced control'}</small>
-                </div>
-                <div className="stat-card">
-                  <span>{isFa ? 'حریم خصوصی' : 'Privacy'}</span>
-                  <strong>{isFa ? 'محلی' : 'Local'}</strong>
-                  <small>{isFa ? 'بدون حساب کاربری اجباری' : 'No account required'}</small>
-                </div>
+                <div className="stat-card"><span>{t.projectCount}</span><strong>{projects.length.toLocaleString(isFa ? 'fa-IR' : 'en-US')}</strong><small>{isFa ? 'در فضای کاری فعلی' : 'In this workspace'}</small></div>
+                <div className="stat-card"><span>{isFa ? 'روش کار' : 'Workflow'}</span><strong>{isFa ? 'ترکیبی' : 'Hybrid'}</strong><small>{isFa ? 'راهنمایی + کنترل حرفه‌ای' : 'Guidance + advanced control'}</small></div>
+                <div className="stat-card"><span>{isFa ? 'حریم خصوصی' : 'Privacy'}</span><strong>{isFa ? 'محلی' : 'Local'}</strong><small>{isFa ? 'بدون حساب کاربری اجباری' : 'No account required'}</small></div>
               </section>
-
               <section className="section-block">
-                <div className="section-heading">
-                  <div>
-                    <h2>{t.howItWorks}</h2>
-                    <p>{isFa ? 'مسیر کلی که هر پروژه طی خواهد کرد' : 'The high-level path every project follows'}</p>
-                  </div>
-                </div>
+                <div className="section-heading"><div><h2>{t.howItWorks}</h2><p>{isFa ? 'مسیر کلی که هر پروژه طی خواهد کرد' : 'The high-level path every project follows'}</p></div></div>
                 <div className="steps-grid">
                   {[
                     { n: '01', title: t.step1, icon: Compass },
@@ -765,34 +961,23 @@ export default function App() {
                     const Icon = s.icon
                     return (
                       <div className="step-card" key={s.n}>
-                        <div className="step-top">
-                          <span>{s.n}</span>
-                          <Icon size={19} />
-                        </div>
+                        <div className="step-top"><span>{s.n}</span><Icon size={19} /></div>
                         <strong>{s.title}</strong>
                       </div>
                     )
                   })}
                 </div>
               </section>
-
               <section className="section-block">
                 <div className="section-heading">
-                  <div>
-                    <h2>{t.activeProjects}</h2>
-                    <p>{isFa ? 'به پروژه‌های در حال ساختت دسترسی داشته باش' : 'Pick up where you left off'}</p>
-                  </div>
-                  <button className="text-button" onClick={() => setActivePage('projects')}>
-                    {isFa ? 'مشاهده همه' : 'View all'} <ArrowUpLeft size={15} />
-                  </button>
+                  <div><h2>{t.activeProjects}</h2><p>{isFa ? 'به پروژه‌های در حال ساختت دسترسی داشته باش' : 'Pick up where you left off'}</p></div>
+                  <button className="text-button" onClick={() => setActivePage('projects')}>{isFa ? 'مشاهده همه' : 'View all'} <ArrowUpLeft size={15} /></button>
                 </div>
                 {projects.length === 0 ? (
                   <div className="empty-state">
                     <div className="empty-icon"><FolderKanban size={25} /></div>
                     <strong>{t.noProjects}</strong>
-                    <button className="secondary-button" onClick={() => setShowCreate(true)}>
-                      {t.createFirst}
-                    </button>
+                    <button className="secondary-button" onClick={() => setShowCreate(true)}>{t.createFirst}</button>
                   </div>
                 ) : (
                   <div className="project-grid">
@@ -808,13 +993,8 @@ export default function App() {
           {activePage === 'projects' && (
             <section className="page-section">
               <div className="page-title-row">
-                <div>
-                  <div className="eyebrow">{isFa ? 'مدیریت پروژه‌ها' : 'PROJECT MANAGEMENT'}</div>
-                  <h1>{t.projects}</h1>
-                </div>
-                <button className="primary-button" onClick={() => setShowCreate(true)}>
-                  <Plus size={17} />{t.newProject}
-                </button>
+                <div><div className="eyebrow">{isFa ? 'مدیریت پروژه‌ها' : 'PROJECT MANAGEMENT'}</div><h1>{t.projects}</h1></div>
+                <button className="primary-button" onClick={() => setShowCreate(true)}><Plus size={17} />{t.newProject}</button>
               </div>
               {projects.length > 0 ? (
                 <div className="project-grid">
@@ -826,9 +1006,7 @@ export default function App() {
                 <div className="empty-state">
                   <div className="empty-icon"><FolderKanban size={25} /></div>
                   <strong>{t.noProjects}</strong>
-                  <button className="secondary-button" onClick={() => setShowCreate(true)}>
-                    {t.createFirst}
-                  </button>
+                  <button className="secondary-button" onClick={() => setShowCreate(true)}>{t.createFirst}</button>
                 </div>
               )}
             </section>
@@ -856,30 +1034,21 @@ export default function App() {
               <div className="eyebrow">{isFa ? 'شخصی‌سازی' : 'PERSONALIZATION'}</div>
               <h1>{t.settings}</h1>
               <div className="settings-panel">
-                <div>
-                  <strong>{t.language}</strong>
-                  <p>{isFa ? 'زبان و جهت نمایش محیط' : 'Interface language and direction'}</p>
-                </div>
+                <div><strong>{t.language}</strong><p>{isFa ? 'زبان و جهت نمایش محیط' : 'Interface language and direction'}</p></div>
                 <div className="segmented">
                   <button className={language === 'fa' ? 'selected' : ''} onClick={() => setLanguage('fa')}>فارسی</button>
                   <button className={language === 'en' ? 'selected' : ''} onClick={() => setLanguage('en')}>English</button>
                 </div>
               </div>
               <div className="settings-panel">
-                <div>
-                  <strong>{t.theme}</strong>
-                  <p>{isFa ? 'حالت نمایش دلخواهت را انتخاب کن' : 'Choose your preferred appearance'}</p>
-                </div>
+                <div><strong>{t.theme}</strong><p>{isFa ? 'حالت نمایش دلخواهت را انتخاب کن' : 'Choose your preferred appearance'}</p></div>
                 <div className="segmented">
                   <button className={theme === 'light' ? 'selected' : ''} onClick={() => setTheme('light')}>{t.light}</button>
                   <button className={theme === 'dark' ? 'selected' : ''} onClick={() => setTheme('dark')}>{t.dark}</button>
                 </div>
               </div>
               <div className="settings-panel">
-                <div>
-                  <strong>{isFa ? 'نسخه و ذخیره‌سازی' : 'Version & storage'}</strong>
-                  <p>{t.localNotice}</p>
-                </div>
+                <div><strong>{isFa ? 'نسخه و ذخیره‌سازی' : 'Version & storage'}</strong><p>{t.localNotice}</p></div>
                 <div style={{ textAlign: isFa ? 'left' : 'right', color: 'var(--muted)', fontSize: 13 }}>
                   <div>{t.versionLabel}</div>
                   <div>{storageInfo.backend}</div>
@@ -894,30 +1063,17 @@ export default function App() {
         <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowCreate(false) }}>
           <section className="modal" role="dialog" aria-modal="true">
             <div className="modal-head">
-              <div>
-                <div className="eyebrow">{isFa ? 'شروع جدید' : 'NEW START'}</div>
-                <h2>{t.newProject}</h2>
-              </div>
-              <button className="icon-button" onClick={() => setShowCreate(false)} aria-label="Close">
-                <X size={19} />
-              </button>
+              <div><div className="eyebrow">{isFa ? 'شروع جدید' : 'NEW START'}</div><h2>{t.newProject}</h2></div>
+              <button className="icon-button" onClick={() => setShowCreate(false)}><X size={19} /></button>
             </div>
-            <label>
-              <span>{t.projectName}</span>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder={isFa ? 'مثلاً فروشگاه شخصی' : 'e.g. Personal store'} />
-            </label>
+            <label><span>{t.projectName}</span><input value={name} onChange={e => setName(e.target.value)} placeholder={isFa ? 'مثلاً فروشگاه شخصی' : 'e.g. Personal store'} /></label>
             <label>
               <span>{t.projectType}</span>
               <select value={type} onChange={e => setType(e.target.value as ProjectType)}>
-                {projectTypes.map(pt => (
-                  <option key={pt} value={pt}>{t[pt]}</option>
-                ))}
+                {projectTypes.map(pt => <option key={pt} value={pt}>{t[pt]}</option>)}
               </select>
             </label>
-            <label>
-              <span>{t.description}</span>
-              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder={isFa ? 'توضیح کوتاه...' : 'Short description...'} />
-            </label>
+            <label><span>{t.description}</span><textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} /></label>
             {formError && <div className="form-error">{formError}</div>}
             <div className="modal-actions">
               <button className="secondary-button" onClick={() => setShowCreate(false)}>{t.cancel}</button>
@@ -929,29 +1085,22 @@ export default function App() {
 
       {deleteTarget && (
         <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setDeleteTarget(null) }}>
-          <section className="modal modal-danger" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+          <section className="modal modal-danger" role="dialog" aria-modal="true">
             <div className="modal-head">
               <div>
                 <div className="eyebrow" style={{ color: '#ef4444' }}>
                   <AlertTriangle size={14} style={{ display: 'inline', marginInlineEnd: 4 }} />
                   {isFa ? 'عملیات غیرقابل بازگشت' : 'IRREVERSIBLE ACTION'}
                 </div>
-                <h2 id="delete-title">{t.confirmDeleteTitle}</h2>
+                <h2>{t.confirmDeleteTitle}</h2>
               </div>
-              <button className="icon-button" onClick={() => setDeleteTarget(null)} aria-label="Close">
-                <X size={19} />
-              </button>
+              <button className="icon-button" onClick={() => setDeleteTarget(null)}><X size={19} /></button>
             </div>
-            <p style={{ margin: '12px 0 20px', lineHeight: 1.6, color: 'var(--muted)' }}>
-              {t.confirmDeleteMessage}
-            </p>
+            <p style={{ margin: '12px 0 20px', lineHeight: 1.6, color: 'var(--muted)' }}>{t.confirmDeleteMessage}</p>
             <p style={{ marginBottom: 20, fontWeight: 600 }}>«{deleteTarget.name}»</p>
             <div className="modal-actions">
               <button className="secondary-button" onClick={() => setDeleteTarget(null)}>{t.cancel}</button>
-              <button className="danger-button" onClick={confirmDelete}>
-                <Trash2 size={16} />
-                {t.confirmDeleteButton}
-              </button>
+              <button className="danger-button" onClick={confirmDelete}><Trash2 size={16} />{t.confirmDeleteButton}</button>
             </div>
           </section>
         </div>
@@ -960,25 +1109,20 @@ export default function App() {
   )
 }
 
-function ProjectCard({
-  project, t, isFa, onOpen, onDelete,
-}: {
-  project: Project
-  t: TranslationKeys
-  isFa: boolean
-  onOpen: () => void
-  onDelete: () => void
+function ProjectCard({ project, t, isFa, onOpen, onDelete }: {
+  project: Project; t: TranslationKeys; isFa: boolean; onOpen: () => void; onDelete: () => void
 }) {
   const stageLabel = t[project.stage] || t.discovery
   const taskCount = project.tasks?.length || 0
   const doneCount = project.tasks?.filter(tk => tk.done).length || 0
   const discCount = project.discovery?.answers?.length || 0
+  const aiCount = project.ai?.messages?.length || 0
 
   return (
     <article className="project-card" onClick={onOpen} style={{ cursor: 'pointer' }}>
       <div className="project-card-top">
         <div className="project-icon"><FolderKanban size={19} /></div>
-        <button className="delete-button" title={t.delete} onClick={e => { e.stopPropagation(); onDelete() }} aria-label={t.delete}>
+        <button className="delete-button" title={t.delete} onClick={e => { e.stopPropagation(); onDelete() }}>
           <Trash2 size={16} />
         </button>
       </div>
@@ -987,10 +1131,9 @@ function ProjectCard({
       <div className="project-card-footer">
         <span className="stage-tag">{stageLabel}</span>
         {discCount > 0 && <small style={{ marginInlineEnd: 6 }}>{discCount}Q</small>}
+        {aiCount > 0 && <small style={{ marginInlineEnd: 6 }}>AI:{aiCount}</small>}
         {taskCount > 0 && <small style={{ marginInlineEnd: 8 }}>{doneCount}/{taskCount}</small>}
-        <small>
-          {new Date(project.updatedAt || project.createdAt).toLocaleDateString(isFa ? 'fa-IR' : 'en-US')}
-        </small>
+        <small>{new Date(project.updatedAt || project.createdAt).toLocaleDateString(isFa ? 'fa-IR' : 'en-US')}</small>
       </div>
     </article>
   )

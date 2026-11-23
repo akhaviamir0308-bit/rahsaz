@@ -1,11 +1,16 @@
 /**
- * Persistence layer for RahSaz (Phase 2)
+ * Persistence layer for RahSaz (Phase 3)
  */
 
-import type { Project, StorageResult, Task, DiscoveryData } from './types'
+import type { Project, StorageResult, Task, DiscoveryData, AiData, AiMessage } from './types'
 
-const STORAGE_KEY = 'rahsaz.projects.v040'
-const LEGACY_KEYS = ['rahsaz.projects.v030', 'rahsaz.projects.v021', 'rahsaz.projects.v020']
+const STORAGE_KEY = 'rahsaz.projects.v050'
+const LEGACY_KEYS = [
+  'rahsaz.projects.v040',
+  'rahsaz.projects.v030',
+  'rahsaz.projects.v021',
+  'rahsaz.projects.v020',
+]
 
 function readRaw(): unknown {
   try {
@@ -43,6 +48,7 @@ function migrateProject(p: any): Project {
     language: p.language === 'en' || p.language === 'fa' ? p.language : undefined,
     tasks: Array.isArray(p.tasks) ? p.tasks.map(normalizeTask).filter(Boolean) as Task[] : [],
     discovery: normalizeDiscovery(p.discovery),
+    ai: normalizeAi(p.ai),
   }
 }
 
@@ -70,6 +76,28 @@ function normalizeDiscovery(d: any): DiscoveryData | undefined {
   }
 }
 
+function normalizeAiMessage(m: any): AiMessage | null {
+  if (!m || typeof m !== 'object' || typeof m.id !== 'string' || typeof m.content !== 'string') return null
+  if (m.role !== 'user' && m.role !== 'assistant' && m.role !== 'system') return null
+  return {
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    label: typeof m.label === 'string' ? m.label : undefined,
+    createdAt: typeof m.createdAt === 'string' ? m.createdAt : new Date().toISOString(),
+  }
+}
+
+function normalizeAi(a: any): AiData | undefined {
+  if (!a || typeof a !== 'object') return undefined
+  return {
+    messages: Array.isArray(a.messages)
+      ? a.messages.map(normalizeAiMessage).filter(Boolean) as AiMessage[]
+      : [],
+    updatedAt: typeof a.updatedAt === 'string' ? a.updatedAt : new Date().toISOString(),
+  }
+}
+
 function normalizeProject(p: any): Project | null {
   if (!p || typeof p !== 'object') return null
   if (typeof p.id !== 'string' || !p.id) return null
@@ -88,6 +116,7 @@ function normalizeProject(p: any): Project | null {
     language: p.language === 'en' || p.language === 'fa' ? p.language : undefined,
     tasks: Array.isArray(p.tasks) ? p.tasks.map(normalizeTask).filter(Boolean) as Task[] : [],
     discovery: normalizeDiscovery(p.discovery),
+    ai: normalizeAi(p.ai),
   }
 }
 
@@ -131,6 +160,7 @@ export function createProject(
     language: input.language,
     tasks: [],
     discovery: { answers: [], notes: '', confirmed: false, updatedAt: now },
+    ai: { messages: [], updatedAt: now },
   }
 
   const next = [project, ...current]
@@ -148,7 +178,7 @@ export function deleteProject(id: string, current: Project[]): StorageResult<Pro
 
 export function updateProject(
   id: string,
-  patch: Partial<Pick<Project, 'name' | 'description' | 'type' | 'stage' | 'status' | 'language' | 'tasks' | 'discovery'>>,
+  patch: Partial<Pick<Project, 'name' | 'description' | 'type' | 'stage' | 'status' | 'language' | 'tasks' | 'discovery' | 'ai'>>,
   current: Project[]
 ): StorageResult<Project[]> {
   const index = current.findIndex((p) => p.id === id)
@@ -162,6 +192,7 @@ export function updateProject(
   if (patch.description !== undefined) updated.description = patch.description.trim()
   if (patch.tasks !== undefined) updated.tasks = patch.tasks
   if (patch.discovery !== undefined) updated.discovery = patch.discovery
+  if (patch.ai !== undefined) updated.ai = patch.ai
 
   const next = [...current]
   next[index] = updated
