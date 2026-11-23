@@ -3,11 +3,12 @@
  */
 
 import type {
-  Project, StorageResult, Task, DiscoveryData, AiData, AiMessage, FilesData, ProjectFile,
+  Project, StorageResult, Task, DiscoveryData, AiData, AiMessage, FilesData, ProjectFile, QaData,
 } from './types'
 
-const STORAGE_KEY = 'rahsaz.projects.v060'
+const STORAGE_KEY = 'rahsaz.projects.v070'
 const LEGACY_KEYS = [
+  'rahsaz.projects.v060',
   'rahsaz.projects.v050',
   'rahsaz.projects.v040',
   'rahsaz.projects.v030',
@@ -52,6 +53,7 @@ function migrateProject(p: any): Project {
     discovery: normalizeDiscovery(p.discovery),
     ai: normalizeAi(p.ai),
     files: normalizeFiles(p.files),
+    qa: normalizeQa(p.qa),
   }
 }
 
@@ -112,6 +114,20 @@ function normalizeFile(f: any): ProjectFile | null {
   }
 }
 
+function normalizeQa(q: any): QaData | undefined {
+  if (!q || typeof q !== 'object') return undefined
+  const checks: Record<string, boolean> = {}
+  if (q.checks && typeof q.checks === 'object') {
+    for (const [k, v] of Object.entries(q.checks)) {
+      checks[k] = Boolean(v)
+    }
+  }
+  return {
+    checks,
+    updatedAt: typeof q.updatedAt === 'string' ? q.updatedAt : new Date().toISOString(),
+  }
+}
+
 function normalizeFiles(fd: any): FilesData | undefined {
   if (!fd || typeof fd !== 'object') return undefined
   return {
@@ -141,6 +157,7 @@ function normalizeProject(p: any): Project | null {
     discovery: normalizeDiscovery(p.discovery),
     ai: normalizeAi(p.ai),
     files: normalizeFiles(p.files),
+    qa: normalizeQa(p.qa),
   }
 }
 
@@ -204,7 +221,7 @@ export function deleteProject(id: string, current: Project[]): StorageResult<Pro
 
 export function updateProject(
   id: string,
-  patch: Partial<Pick<Project, 'name' | 'description' | 'type' | 'stage' | 'status' | 'language' | 'tasks' | 'discovery' | 'ai' | 'files'>>,
+  patch: Partial<Pick<Project, 'name' | 'description' | 'type' | 'stage' | 'status' | 'language' | 'tasks' | 'discovery' | 'ai' | 'files' | 'qa'>>,
   current: Project[]
 ): StorageResult<Project[]> {
   const index = current.findIndex((p) => p.id === id)
@@ -218,6 +235,7 @@ export function updateProject(
   if (patch.discovery !== undefined) updated.discovery = patch.discovery
   if (patch.ai !== undefined) updated.ai = patch.ai
   if (patch.files !== undefined) updated.files = patch.files
+  if (patch.qa !== undefined) updated.qa = patch.qa
   const next = [...current]
   next[index] = updated
   const saveResult = saveProjects(next)

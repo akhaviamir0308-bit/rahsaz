@@ -1,20 +1,19 @@
-# Rahsaz — v0.6.0
+# Rahsaz — v0.7.0
 
-Phase 4: File & code management inside each project.
+Phase 5: Preview & quality checklist.
 
-## What is new
-- **Files tab** in the project workspace
-- Create files and folders (virtual tree in the browser)
-- Simple code editor with save
-- Delete file / folder
-- **Starter structure** button (`index.html`, `styles.css`, `main.js`, `README.md`)
-- Data migrates from v0.5.x automatically
-
-## Notes
-Files are stored in localStorage with the project. This is not a real disk or Git repo yet — it is a foundation for later export and preview.
+## New
+- **Preview tab**: render `index.html` (+ linked local CSS/JS) in a sandboxed iframe
+- Viewport modes: desktop / tablet / mobile
+- **Quality checklist** stored per project
 
 ## Run
 ```bash
 npm install
 npm run dev
+```
+
+## Build
+```bash
+npm run build
 ```

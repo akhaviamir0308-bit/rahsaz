@@ -1,4 +1,5 @@
-# Rahsaz — v0.6.0 (Phase 4)
+# Rahsaz v0.7.0 — Phase 5
 
-Virtual file tree per project (`FilesData` / `ProjectFile`) stored in localStorage.
-Editor is a controlled textarea. No sandboxed runtime in this phase.
+Preview builds HTML from virtual files (`index.html` + inlined relative CSS/JS).
+Iframe sandbox: `allow-scripts` only (no same-origin network).
+QA checklist persisted on `Project.qa`.

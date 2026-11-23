@@ -64,6 +64,11 @@ export interface FilesData {
   updatedAt: string
 }
 
+export interface QaData {
+  checks: Record<string, boolean>
+  updatedAt: string
+}
+
 export interface Project {
   id: string
   name: string
@@ -78,6 +83,7 @@ export interface Project {
   discovery?: DiscoveryData
   ai?: AiData
   files?: FilesData
+  qa?: QaData
 }
 
 export type StorageResult<T> =

@@ -4,11 +4,11 @@ import {
   Languages, Sparkles, ArrowUpLeft, Trash2, X, Layers3,
   WandSparkles, Code2, Rocket, PanelLeftClose, AlertTriangle,
   CheckCircle2, Circle, ListTodo, Info, ChevronLeft, ClipboardList,
-  Bot, Copy, Check, MessageSquare, FileCode2, FolderPlus, FilePlus2
+  Bot, Copy, Check, MessageSquare, FileCode2, FolderPlus, FilePlus2, Eye, Monitor, Smartphone, Tablet
 } from 'lucide-react'
 import type {
   Language, Project, ProjectType, ProjectStage, ProjectStatus,
-  Theme, Task, DiscoveryData, DiscoveryAnswer, AiData, AiMessage, FilesData, ProjectFile
+  Theme, Task, DiscoveryData, DiscoveryAnswer, AiData, AiMessage, FilesData, ProjectFile, QaData
 } from './types'
 import {
   getTranslations, type TranslationKeys, DISCOVERY_QUESTIONS, PROMPT_TEMPLATES
@@ -28,7 +28,7 @@ const stages: ProjectStage[] = [
 const statuses: ProjectStatus[] = ['active', 'archived', 'completed']
 
 type PageId = 'overview' | 'projects' | 'guide' | 'settings'
-type WorkspaceTab = 'overview' | 'discovery' | 'ai' | 'files' | 'tasks' | 'settings'
+type WorkspaceTab = 'overview' | 'discovery' | 'ai' | 'files' | 'preview' | 'tasks' | 'settings'
 
 /** Build a context block from project + discovery */
 function buildProjectContext(project: Project, t: TranslationKeys, isFa: boolean): string {
@@ -101,6 +101,48 @@ function buildPromptFromTemplate(
   return `${header}${ctx}\n\n---\n\n${body}`
 }
 
+
+
+const QA_KEYS = ['qa_responsive', 'qa_content', 'qa_links', 'qa_images', 'qa_lang'] as const
+
+/** Build srcdoc HTML from virtual files (index.html + inline css/js when referenced) */
+function buildPreviewHtml(files: ProjectFile[]): string | null {
+  const list = files.filter(f => f.kind === 'file')
+  const byPath: Record<string, string> = {}
+  for (const f of list) {
+    byPath[f.path] = f.content || ''
+  }
+  let html = byPath['index.html']
+  if (html === undefined) {
+    // try any html file
+    const htmlFile = list.find(f => f.path.endsWith('.html'))
+    if (!htmlFile) return null
+    html = htmlFile.content || ''
+  }
+  // Inline local CSS linked as href="styles.css" or similar relative
+  html = html.replace(
+    /<link[^>]+href=["']([^"']+\.css)["'][^>]*>/gi,
+    (match: string, href: string): string => {
+      const key = href.replace(/^\.\//, '')
+      const css = byPath[key]
+      if (css === undefined) return match
+      return '<style>\n' + css + '\n</style>'
+    }
+  )
+  // Inline local JS
+  html = html.replace(
+    /<script[^>]+src=["']([^"']+\.js)["'][^>]*>\s*<\/script>/gi,
+    (match: string, src: string): string => {
+      const key = src.replace(/^\.\//, '')
+      const js = byPath[key]
+      if (js === undefined) return match
+      return '<script>\n' + js + '\n</script>'
+    }
+  )
+  return html
+}
+
+
 export default function App() {
   const [language, setLanguage] = useState<Language>(
     () => (localStorage.getItem('rahsaz.language') as Language) || 'fa'
@@ -147,6 +189,11 @@ export default function App() {
   const [editorDirty, setEditorDirty] = useState(false)
   const [newPath, setNewPath] = useState('')
   const [fileError, setFileError] = useState('')
+
+  // Preview / QA
+  const [viewport, setViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop')
+  const [previewKey, setPreviewKey] = useState(0)
+  const [qaChecks, setQaChecks] = useState<Record<string, boolean>>({})
 
   const t = useMemo(() => getTranslations(language), [language])
   const isFa = language === 'fa'
@@ -198,6 +245,13 @@ export default function App() {
     setEditorDirty(false)
     setNewPath('')
     setFileError('')
+    setViewport('desktop')
+    setPreviewKey(k => k + 1)
+    const qc: Record<string, boolean> = {}
+    if (project.qa?.checks) {
+      for (const [k, v] of Object.entries(project.qa.checks)) qc[k] = Boolean(v)
+    }
+    setQaChecks(qc)
   }, [])
 
   const closeProject = useCallback(() => {
@@ -488,6 +542,17 @@ export default function App() {
   }, [activeProject, getFiles, persistFiles])
 
 
+
+  const handleToggleQa = useCallback((key: string) => {
+    if (!activeProject) return
+    const next = { ...qaChecks, [key]: !qaChecks[key] }
+    setQaChecks(next)
+    const qa: QaData = { checks: next, updatedAt: new Date().toISOString() }
+    const result = storageUpdate(activeProject.id, { qa }, projects)
+    if (result.ok) setProjects(result.data)
+    else setStorageError(result.error)
+  }, [activeProject, qaChecks, projects])
+
   const nav = [
     { id: 'overview' as const, label: t.overview, icon: Compass },
     { id: 'projects' as const, label: t.projects, icon: FolderKanban },
@@ -536,6 +601,7 @@ export default function App() {
               { id: 'discovery' as const, label: t.projectDiscovery, icon: ClipboardList },
               { id: 'ai' as const, label: t.projectAi, icon: Bot },
               { id: 'files' as const, label: t.projectFiles, icon: FileCode2 },
+              { id: 'preview' as const, label: t.projectPreview, icon: Eye },
               { id: 'tasks' as const, label: t.projectTasks, icon: ListTodo },
               { id: 'settings' as const, label: t.projectSettings, icon: Settings },
             ].map(item => {
@@ -572,6 +638,7 @@ export default function App() {
                   : workspaceTab === 'discovery' ? t.projectDiscovery
                   : workspaceTab === 'ai' ? t.projectAi
                   : workspaceTab === 'files' ? t.projectFiles
+                  : workspaceTab === 'preview' ? t.projectPreview
                   : workspaceTab === 'tasks' ? t.projectTasks
                   : t.projectSettings}
               </span>
@@ -992,6 +1059,85 @@ export default function App() {
                         />
                       </>
                     )}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            
+            {/* PREVIEW & QA */}
+            {workspaceTab === 'preview' && (
+              <section className="page-section">
+                <div className="page-title-row">
+                  <div>
+                    <div className="eyebrow">{t.projectPreview}</div>
+                    <h1>{t.previewTitle}</h1>
+                    <p style={{ color: 'var(--muted)' }}>{t.previewSubtitle}</p>
+                  </div>
+                </div>
+
+                <div className="preview-toolbar">
+                  <span className="preview-label">{t.previewViewport}</span>
+                  <div className="segmented">
+                    <button type="button" className={viewport === 'desktop' ? 'selected' : ''} onClick={() => setViewport('desktop')}>
+                      <Monitor size={14} /> {t.viewportDesktop}
+                    </button>
+                    <button type="button" className={viewport === 'tablet' ? 'selected' : ''} onClick={() => setViewport('tablet')}>
+                      <Tablet size={14} /> {t.viewportTablet}
+                    </button>
+                    <button type="button" className={viewport === 'mobile' ? 'selected' : ''} onClick={() => setViewport('mobile')}>
+                      <Smartphone size={14} /> {t.viewportMobile}
+                    </button>
+                  </div>
+                  <button type="button" className="secondary-button" onClick={() => setPreviewKey(k => k + 1)}>
+                    {t.refreshPreview}
+                  </button>
+                </div>
+                <p className="ai-hint">{t.previewSandboxNote}</p>
+
+                {(() => {
+                  const html = buildPreviewHtml(getFiles())
+                  if (!html) {
+                    return (
+                      <div className="empty-state" style={{ marginTop: 16 }}>
+                        <div className="empty-icon"><Eye size={22} /></div>
+                        <strong>{t.noHtmlPreview}</strong>
+                      </div>
+                    )
+                  }
+                  const width = viewport === 'mobile' ? 375 : viewport === 'tablet' ? 768 : '100%'
+                  return (
+                    <div className="preview-frame-wrap">
+                      <iframe
+                        key={previewKey}
+                        title="preview"
+                        className="preview-frame"
+                        style={{ width }}
+                        sandbox="allow-scripts"
+                        srcDoc={html}
+                      />
+                    </div>
+                  )
+                })()}
+
+                <div className="ai-block" style={{ marginTop: 28 }}>
+                  <h3 className="ai-block-title">{t.qaTitle}</h3>
+                  <p className="ai-hint">{t.qaSubtitle}</p>
+                  <div className="qa-progress">
+                    {t.qaProgress}: {QA_KEYS.filter(k => qaChecks[k]).length} / {QA_KEYS.length}
+                  </div>
+                  <div className="qa-list">
+                    {QA_KEYS.map(key => (
+                      <label key={key} className={`qa-item ${qaChecks[key] ? 'done' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(qaChecks[key])}
+                          onChange={() => handleToggleQa(key)}
+                        />
+                        <span>{t[key]}</span>
+                        <small>{qaChecks[key] ? t.qa_done : t.qa_todo}</small>
+                      </label>
+                    ))}
                   </div>
                 </div>
               </section>

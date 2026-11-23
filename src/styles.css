@@ -125,3 +125,16 @@
 .editor-path{font-size:12px;font-weight:600;color:var(--muted);word-break:break-all}
 .code-editor{width:100%;min-height:320px;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.5;resize:vertical;outline:none}
 .code-editor:focus{border-color:var(--accent)}
+
+/* Phase 5 — Preview & QA */
+.preview-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:16px 0 8px}
+.preview-label{font-size:12px;font-weight:700;color:var(--muted)}
+.preview-frame-wrap{border:1px solid var(--line);border-radius:14px;background:var(--panel3);padding:16px;display:flex;justify-content:center;min-height:420px}
+.preview-frame{height:480px;max-width:100%;border:1px solid var(--line);border-radius:10px;background:#fff}
+.qa-progress{font-size:13px;font-weight:700;margin-bottom:12px;color:var(--accent)}
+.qa-list{display:grid;gap:8px}
+.qa-item{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);cursor:pointer}
+.qa-item.done{border-color:var(--green)}
+.qa-item span{font-size:13px;font-weight:600}
+.qa-item small{font-size:11px;color:var(--muted)}
+.segmented button{display:inline-flex;align-items:center;gap:6px}
