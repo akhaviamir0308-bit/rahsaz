@@ -132,7 +132,9 @@ const en = {
   versionLabel: 'Version 0.2.1',
 } as const
 
-export type TranslationKeys = typeof fa
+export type TranslationKeys = {
+  [K in keyof typeof fa]: string
+}
 
 export function getTranslations(language: Language): TranslationKeys {
   return language === 'fa' ? fa : en
