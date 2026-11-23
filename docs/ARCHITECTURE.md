@@ -1,4 +1,4 @@
-# Rahsaz v0.8.0 — Phase 6
+# Rahsaz v0.9.0 — Phase 7
 
-TestReport and VersionsData on Project.
-Snapshots clone virtual files for restore. Max 20 snapshots per project.
+Publish readiness is derived from discovery, files, tests, and QA.
+ZIP export uses a store-only ZIP writer in `src/zip.ts` (no compression library).

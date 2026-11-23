@@ -1,11 +1,13 @@
-# Rahsaz — v0.8.0
+# Rahsaz — v0.9.0
 
-Phase 6: Testing & versioning.
+Phase 7: Publish & handoff.
 
 ## New
-- **Versions tab**: run automated file checks
-- **Snapshots**: save / restore / delete project file snapshots (up to 20)
-- Checks: index.html, empty files, CSS presence, file count
+- **Publish tab** with readiness checklist
+- **ZIP export** of project files (no extra dependencies)
+- **JSON backup** of the full project
+- Mark project as **published**
+- Deploy notes for GitHub Pages and Netlify/Cloudflare
 
 ## Run
 ```bash

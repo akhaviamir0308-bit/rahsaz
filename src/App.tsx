@@ -5,7 +5,7 @@ import {
   WandSparkles, Code2, Rocket, PanelLeftClose, AlertTriangle,
   CheckCircle2, Circle, ListTodo, Info, ChevronLeft, ClipboardList,
   Bot, Copy, Check, MessageSquare, FileCode2, FolderPlus, FilePlus2, Eye, Monitor, Smartphone, Tablet,
-  History, FlaskConical, RotateCcw
+  History, FlaskConical, RotateCcw, Upload, Download
 } from 'lucide-react'
 import type {
   Language, Project, ProjectType, ProjectStage, ProjectStatus,
@@ -19,6 +19,7 @@ import {
   loadProjects, createProject as storageCreate,
   deleteProject as storageDelete, updateProject as storageUpdate, storageInfo,
 } from './storage'
+import { buildZip, downloadBlob } from './zip'
 
 const projectTypes: ProjectType[] = [
   'portfolio', 'business', 'store', 'education',
@@ -30,7 +31,7 @@ const stages: ProjectStage[] = [
 const statuses: ProjectStatus[] = ['active', 'archived', 'completed']
 
 type PageId = 'overview' | 'projects' | 'guide' | 'settings'
-type WorkspaceTab = 'overview' | 'discovery' | 'ai' | 'files' | 'preview' | 'versions' | 'tasks' | 'settings'
+type WorkspaceTab = 'overview' | 'discovery' | 'ai' | 'files' | 'preview' | 'versions' | 'publish' | 'tasks' | 'settings'
 
 /** Build a context block from project + discovery */
 function buildProjectContext(project: Project, t: TranslationKeys, isFa: boolean): string {
@@ -667,6 +668,43 @@ export default function App() {
     else setStorageError(result.error)
   }, [activeProject, projects, t])
 
+
+  const handleExportZip = useCallback(() => {
+    if (!activeProject) return
+    const files = getFiles().filter(f => f.kind === 'file')
+    if (files.length === 0) {
+      setFileError(t.noFilesExport)
+      return
+    }
+    const blob = buildZip(files.map(f => ({ path: f.path, content: f.content || '' })))
+    const safe = activeProject.name.replace(/[^\w\u0600-\u06FF\-]+/g, '_').slice(0, 40) || 'project'
+    downloadBlob(safe + '.zip', blob)
+    setSaveMessage(t.exportDone)
+    setTimeout(() => setSaveMessage(''), 2000)
+  }, [activeProject, getFiles, t])
+
+  const handleExportBackup = useCallback(() => {
+    if (!activeProject) return
+    const json = JSON.stringify(activeProject, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const safe = activeProject.name.replace(/[^\w\u0600-\u06FF\-]+/g, '_').slice(0, 40) || 'project'
+    downloadBlob(safe + '-backup.json', blob)
+    setSaveMessage(t.exportDone)
+    setTimeout(() => setSaveMessage(''), 2000)
+  }, [activeProject, t])
+
+  const handleMarkPublished = useCallback(() => {
+    if (!activeProject) return
+    const result = storageUpdate(activeProject.id, { stage: 'published', status: 'completed' }, projects)
+    if (result.ok) {
+      setProjects(result.data)
+      setEditStage('published')
+      setEditStatus('completed')
+      setSaveMessage(t.markedPublished)
+      setTimeout(() => setSaveMessage(''), 2500)
+    } else setStorageError(result.error)
+  }, [activeProject, projects, t])
+
   const nav = [
     { id: 'overview' as const, label: t.overview, icon: Compass },
     { id: 'projects' as const, label: t.projects, icon: FolderKanban },
@@ -717,6 +755,7 @@ export default function App() {
               { id: 'files' as const, label: t.projectFiles, icon: FileCode2 },
               { id: 'preview' as const, label: t.projectPreview, icon: Eye },
               { id: 'versions' as const, label: t.projectVersions, icon: History },
+              { id: 'publish' as const, label: t.projectPublish, icon: Upload },
               { id: 'tasks' as const, label: t.projectTasks, icon: ListTodo },
               { id: 'settings' as const, label: t.projectSettings, icon: Settings },
             ].map(item => {
@@ -755,6 +794,7 @@ export default function App() {
                   : workspaceTab === 'files' ? t.projectFiles
                   : workspaceTab === 'preview' ? t.projectPreview
                   : workspaceTab === 'versions' ? t.projectVersions
+                  : workspaceTab === 'publish' ? t.projectPublish
                   : workspaceTab === 'tasks' ? t.projectTasks
                   : t.projectSettings}
               </span>
