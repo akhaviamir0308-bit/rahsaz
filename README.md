@@ -1,4 +1,21 @@
-# Rahsaz — v0.10.0
+# Rahsaz — v0.10.1
+
+## 0.10.1 — bug-fix round (preview rewrite)
+- **Preview rewritten** (`src/preview.ts`, `src/components/PreviewPane.tsx`):
+  - renders at the *real* width (desktop 1280 / tablet 768 / mobile 390) and scales to fit — before, "desktop" was ~960px wide and 480px tall, so media queries and layout differed from the real site;
+  - fixed: clicking any `#anchor` link loaded Rahsaz itself inside the preview;
+  - paths now resolve properly (`css/main.css`, `./x`, `../x`, `/abs`, `?query`); local SVG images and CSS `url()` are inlined;
+  - multi-page sites: links between `.html` pages work, plus a page selector;
+  - runtime JS errors are shown in a panel; "Open in new tab" shows the page in a real browser tab;
+  - warns when the editor has unsaved changes.
+- **Restore** now keeps an automatic "before restore" snapshot (restore is undoable).
+- **Import backup** (JSON) on the Projects page — backups can finally be restored.
+- File save no longer reports success when storage failed; unsaved-edit guard on leaving a project / closing the tab.
+- File creation rejects a file inside a file, invalid characters, empty segments.
+- App no longer crashes when `localStorage` is blocked or when `crypto.randomUUID` is unavailable (plain-http hosting).
+- Storage usage meter in Settings; Esc closes dialogs; Enter creates a project; clipboard fallback.
+- Test "local links valid" now resolves paths correctly and ignores not-yet-added images.
+
 
 ## New in 0.10.0 — Rahsaz Academy ("from 0 to 100")
 - **Academy** (nav item "آموزش"/"Academy", also a tab inside every project): 23 bilingual lessons in 5 modules — mindset & prerequisites, a tour of every Rahsaz tool, a full 5-step résumé-site project, troubleshooting, privacy and next steps. Progress is saved locally.

@@ -2,6 +2,7 @@
  * Persistence layer for RahSaz (Phase 4)
  */
 
+import { uid } from './uid'
 import type {
   Project, StorageResult, Task, DiscoveryData, AiData, AiMessage, FilesData, ProjectFile, QaData,
   TestReport, VersionsData, VersionSnapshot, TestCheck,
@@ -42,7 +43,7 @@ function readRaw(): unknown {
 function migrateProject(p: any): Project {
   const now = new Date().toISOString()
   return {
-    id: typeof p.id === 'string' ? p.id : crypto.randomUUID(),
+    id: typeof p.id === 'string' ? p.id : uid(),
     name: typeof p.name === 'string' ? p.name : 'Untitled',
     type: p.type || 'portfolio',
     description: typeof p.description === 'string' ? p.description : '',
@@ -233,7 +234,7 @@ export function createProject(
   if (!name) return { ok: false, error: 'EMPTY_NAME' }
   const now = new Date().toISOString()
   const project: Project = {
-    id: crypto.randomUUID(),
+    id: uid(),
     name,
     type: input.type,
     description: (input.description || '').trim(),
@@ -290,4 +291,32 @@ export const storageInfo = {
   backend: 'localStorage' as const,
   key: STORAGE_KEY,
   supportsIndexedDB: typeof indexedDB !== 'undefined',
+}
+
+/** Import a project from a JSON backup (a single project or an array). New ids avoid clashes. */
+export function importProject(raw: unknown, current: Project[]): StorageResult<Project[]> {
+  const items = Array.isArray(raw) ? raw : [raw]
+  const imported: Project[] = []
+  for (const it of items) {
+    const p = normalizeProject(it)
+    if (!p) continue
+    imported.push({ ...p, id: uid(), name: p.name, updatedAt: new Date().toISOString() })
+  }
+  if (imported.length === 0) return { ok: false, error: 'INVALID_BACKUP' }
+  const next = [...imported, ...current]
+  const saveResult = saveProjects(next)
+  if (!saveResult.ok) return saveResult
+  return { ok: true, data: next }
+}
+
+/** Approximate localStorage usage of Rahsaz data (UTF-16 → 2 bytes/char). */
+export function storageUsage(): { bytes: number; limit: number } {
+  let bytes = 0
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k && k.startsWith('rahsaz.')) bytes += (k.length + (localStorage.getItem(k) || '').length) * 2
+    }
+  } catch { /* unavailable */ }
+  return { bytes, limit: 5 * 1024 * 1024 }
 }

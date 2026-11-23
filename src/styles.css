@@ -129,7 +129,6 @@
 /* Phase 5 — Preview & QA */
 .preview-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:16px 0 8px}
 .preview-label{font-size:12px;font-weight:700;color:var(--muted)}
-.preview-frame-wrap{border:1px solid var(--line);border-radius:14px;background:var(--panel3);padding:16px;display:flex;justify-content:center;min-height:420px}
 .preview-frame{height:480px;max-width:100%;border:1px solid var(--line);border-radius:10px;background:#fff}
 .qa-progress{font-size:13px;font-weight:700;margin-bottom:12px;color:var(--accent)}
 .qa-list{display:grid;gap:8px}
@@ -211,3 +210,5 @@
 .onboard h3{margin:0 0 6px;font-size:16px}
 .onboard p{margin:0 0 12px;color:var(--muted);font-size:13px;line-height:1.9}
 .onboard-actions{display:flex;flex-wrap:wrap;gap:10px}
+.preview-stage{border:1px solid var(--line);border-radius:14px;background:var(--panel3);padding:14px;direction:ltr;overflow:auto}
+[data-theme="light"] .ai-warn{background:#fef3c7;color:#78350f;border-color:#f59e0b}

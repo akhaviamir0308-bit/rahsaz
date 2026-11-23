@@ -4,7 +4,7 @@ import {
   Languages, Sparkles, ArrowUpLeft, Trash2, X, Layers3,
   WandSparkles, Code2, Rocket, PanelLeftClose, AlertTriangle,
   CheckCircle2, Circle, ListTodo, Info, ChevronLeft, ClipboardList,
-  Bot, Copy, Check, MessageSquare, FileCode2, FolderPlus, FilePlus2, Eye, Monitor, Smartphone, Tablet,
+  Bot, Copy, Check, MessageSquare, FileCode2, FolderPlus, FilePlus2, Eye,
   History, FlaskConical, RotateCcw, Upload, Download, GraduationCap, HelpCircle, ArrowLeft, FileText
 } from 'lucide-react'
 import type {
@@ -18,8 +18,12 @@ import {
 import {
   loadProjects, createProject as storageCreate,
   deleteProject as storageDelete, updateProject as storageUpdate, storageInfo,
+  importProject as storageImport, storageUsage,
 } from './storage'
 import { buildZip, downloadBlob } from './zip'
+import { uid, lsGet, lsSet } from './uid'
+import PreviewPane from './components/PreviewPane'
+import { findBrokenRefs, listPages } from './preview'
 import LearnView from './components/LearnView'
 import type { ActionId } from './data/learn'
 import { buildDemo, buildControlDocs } from './data/demo'
@@ -111,44 +115,6 @@ function buildPromptFromTemplate(
 
 const QA_KEYS = ['qa_responsive', 'qa_content', 'qa_links', 'qa_images', 'qa_lang'] as const
 
-/** Build srcdoc HTML from virtual files (index.html + inline css/js when referenced) */
-function buildPreviewHtml(files: ProjectFile[]): string | null {
-  const list = files.filter(f => f.kind === 'file')
-  const byPath: Record<string, string> = {}
-  for (const f of list) {
-    byPath[f.path] = f.content || ''
-  }
-  let html = byPath['index.html']
-  if (html === undefined) {
-    // try any html file
-    const htmlFile = list.find(f => f.path.endsWith('.html'))
-    if (!htmlFile) return null
-    html = htmlFile.content || ''
-  }
-  // Inline local CSS linked as href="styles.css" or similar relative
-  html = html.replace(
-    /<link[^>]+href=["']([^"']+\.css)["'][^>]*>/gi,
-    (match: string, href: string): string => {
-      const key = href.replace(/^\.\//, '')
-      const css = byPath[key]
-      if (css === undefined) return match
-      return '<style>\n' + css + '\n</style>'
-    }
-  )
-  // Inline local JS
-  html = html.replace(
-    /<script[^>]+src=["']([^"']+\.js)["'][^>]*>\s*<\/script>/gi,
-    (match: string, src: string): string => {
-      const key = src.replace(/^\.\//, '')
-      const js = byPath[key]
-      if (js === undefined) return match
-      return '<script>\n' + js + '\n</script>'
-    }
-  )
-  return html
-}
-
-
 const TAB_HELP: Record<string, { lesson: string; fa: string; en: string }> = {
   discovery: { lesson: 't-discovery', fa: 'به ۸ سؤال کلیدی جواب بدهید (حداقل ۳ پاسخ برای تأیید). پاسخ‌ها خودکار وارد پرامپت‌های دستیار AI می‌شوند. «ذخیره» فقط ذخیره می‌کند؛ «تأیید» پروژه را به مرحله برنامه‌ریزی می‌برد.', en: 'Answer the 8 key questions (at least 3 to confirm). Answers flow into the AI assistant prompts. "Save" only saves; "Confirm" moves the project to Planning.' },
   ai: { lesson: 't-ai', fa: 'یک کارت انتخاب کنید ← پرامپت را کپی کنید ← در ChatGPT/Claude بچسبانید ← پاسخ را اینجا ذخیره کنید. راه‌ساز مستقیم به هوش مصنوعی وصل نیست؛ مسیر و حافظه کار را نگه می‌دارد.', en: 'Pick a card → copy the prompt → paste it in ChatGPT/Claude → save the answer here. Rahsaz is not directly connected to an AI; it keeps the path and memory of the work.' },
@@ -178,10 +144,10 @@ function computeNextStep(p: Project, qaDone: number): NextStep {
 
 export default function App() {
   const [language, setLanguage] = useState<Language>(
-    () => (localStorage.getItem('rahsaz.language') as Language) || 'fa'
+    () => (lsGet('rahsaz.language') === 'en' ? 'en' : 'fa')
   )
   const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem('rahsaz.theme') as Theme) || 'dark'
+    () => (lsGet('rahsaz.theme') === 'light' ? 'light' : 'dark')
   )
   const [projects, setProjects] = useState<Project[]>([])
   const [storageReady, setStorageReady] = useState(false)
@@ -224,11 +190,11 @@ export default function App() {
   const [fileError, setFileError] = useState('')
 
   // Preview / QA
-  const [viewport, setViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop')
   const [previewKey, setPreviewKey] = useState(0)
   const [qaChecks, setQaChecks] = useState<Record<string, boolean>>({})
   const [snapLabel, setSnapLabel] = useState('')
   const [snapNote, setSnapNote] = useState('')
+  const [importMsg, setImportMsg] = useState('')
   const [learnLesson, setLearnLesson] = useState<string | undefined>(undefined)
 
   const t = useMemo(() => getTranslations(language), [language])
@@ -249,12 +215,12 @@ export default function App() {
   useEffect(() => {
     document.documentElement.lang = language
     document.documentElement.dir = isFa ? 'rtl' : 'ltr'
-    localStorage.setItem('rahsaz.language', language)
+    lsSet('rahsaz.language', language)
   }, [language, isFa])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
-    localStorage.setItem('rahsaz.theme', theme)
+    lsSet('rahsaz.theme', theme)
   }, [theme])
 
   const openProject = useCallback((project: Project) => {
@@ -281,7 +247,6 @@ export default function App() {
     setEditorDirty(false)
     setNewPath('')
     setFileError('')
-    setViewport('desktop')
     setPreviewKey(k => k + 1)
     const qc: Record<string, boolean> = {}
     if (project.qa?.checks) {
@@ -293,13 +258,29 @@ export default function App() {
   }, [])
 
   const closeProject = useCallback(() => {
+    if (editorDirty && !window.confirm(t.confirmDiscardEdits)) return
+    setEditorDirty(false)
     setActiveProjectId(null)
     setActivePage('projects')
+  }, [editorDirty, t])
+
+  useEffect(() => {
+    if (!editorDirty) return
+    const h = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', h)
+    return () => window.removeEventListener('beforeunload', h)
+  }, [editorDirty])
+
+  // Esc closes modals
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { setShowCreate(false); setDeleteTarget(null) } }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
   }, [])
 
   const handleCreate = useCallback(() => {
     setFormError('')
-    const result = storageCreate({ name, type, description }, projects)
+    const result = storageCreate({ name, type, description, language }, projects)
     if (!result.ok) {
       if (result.error === 'EMPTY_NAME') setFormError(t.emptyName)
       else { setFormError(t.storageError); setStorageError(result.error) }
@@ -309,7 +290,7 @@ export default function App() {
     setName(''); setDescription(''); setType('portfolio'); setShowCreate(false)
     const created = result.data[0]
     if (created) openProject(created)
-  }, [name, type, description, projects, t, openProject])
+  }, [name, type, description, language, projects, t, openProject])
 
   const requestDelete = useCallback((project: Project) => setDeleteTarget(project), [])
 
@@ -342,7 +323,7 @@ export default function App() {
 
   const handleAddTask = useCallback(() => {
     if (!activeProject || !newTaskTitle.trim()) return
-    const task: Task = { id: crypto.randomUUID(), title: newTaskTitle.trim(), done: false, createdAt: new Date().toISOString() }
+    const task: Task = { id: uid(), title: newTaskTitle.trim(), done: false, createdAt: new Date().toISOString() }
     const tasks = [...(activeProject.tasks || []), task]
     const result = storageUpdate(activeProject.id, { tasks }, projects)
     if (result.ok) { setProjects(result.data); setNewTaskTitle('') }
@@ -423,7 +404,7 @@ export default function App() {
       // Also save as user message in history
       if (activeProject) {
         const msg: AiMessage = {
-          id: crypto.randomUUID(),
+          id: uid(),
           role: 'user',
           content: text,
           label: customPrompt.trim()
@@ -437,14 +418,17 @@ export default function App() {
         if (result.ok) setProjects(result.data)
       }
     } catch {
-      // fallback: select text
+      const ta = document.createElement('textarea')
+      ta.value = text; document.body.appendChild(ta); ta.select()
+      try { document.execCommand('copy'); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { /* ignore */ }
+      ta.remove()
     }
   }, [generatedPrompt, handleBuildPrompt, activeProject, selectedTemplate, customPrompt, t, isFa, projects])
 
   const handleSaveResponse = useCallback(() => {
     if (!activeProject || !pasteText.trim()) return
     const msg: AiMessage = {
-      id: crypto.randomUUID(),
+      id: uid(),
       role: 'assistant',
       content: pasteText.trim(),
       createdAt: new Date().toISOString(),
@@ -483,12 +467,13 @@ export default function App() {
     return activeProject?.files?.files || []
   }, [activeProject])
 
-  const persistFiles = useCallback((files: ProjectFile[]) => {
-    if (!activeProject) return
+  const persistFiles = useCallback((files: ProjectFile[]): boolean => {
+    if (!activeProject) return false
     const data: FilesData = { files, updatedAt: new Date().toISOString() }
     const result = storageUpdate(activeProject.id, { files: data }, projects)
-    if (result.ok) setProjects(result.data)
-    else setStorageError(result.error)
+    if (result.ok) { setProjects(result.data); return true }
+    setStorageError(result.error)
+    return false
   }, [activeProject, projects])
 
   const normalizePath = (raw: string) =>
@@ -507,9 +492,21 @@ export default function App() {
       setFileError(t.pathExists)
       return
     }
+    // a path cannot be both a file and a folder prefix
+    const segs = path.split('/')
+    const parents = segs.slice(0, -1).map((_, i) => segs.slice(0, i + 1).join('/'))
+    if (parents.some(pp => files.some(f => f.path === pp && f.kind === 'file')) ||
+        files.some(f => f.path.startsWith(path + '/') && kind === 'file')) {
+      setFileError(t.pathExists)
+      return
+    }
+    if (/[<>:"|?*\x00-\x1f]/.test(path) || path.endsWith('/') || segs.some(sg => sg === '.' || sg === '')) {
+      setFileError(t.invalidPath)
+      return
+    }
     const now = new Date().toISOString()
     const entry: ProjectFile = {
-      id: crypto.randomUUID(),
+      id: uid(),
       path,
       kind,
       content: kind === 'file' ? '' : undefined,
@@ -541,7 +538,7 @@ export default function App() {
         ? { ...f, content: editorContent, updatedAt: new Date().toISOString() }
         : f
     )
-    persistFiles(files)
+    if (!persistFiles(files)) return
     setEditorDirty(false)
     setSaveMessage(t.fileSaved)
     setTimeout(() => setSaveMessage(''), 2000)
@@ -571,7 +568,7 @@ export default function App() {
     const existing = new Set(getFiles().map(f => f.path))
     const safeName = activeProject.name.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] as string))
     const lang = activeProject.language || language
-    const mk = (path: string, content: string): ProjectFile => ({ id: crypto.randomUUID(), path, kind: 'file', content, updatedAt: now })
+    const mk = (path: string, content: string): ProjectFile => ({ id: uid(), path, kind: 'file', content, updatedAt: now })
     const starters: ProjectFile[] = [
       mk('index.html', `<!DOCTYPE html>
 <html lang="${lang}" dir="${lang === 'fa' ? 'rtl' : 'ltr'}">
@@ -643,18 +640,16 @@ Created with Rahsaz.
       ok: hasCss,
       detail: hasCss ? 'tc_hasCss_ok' : 'tc_hasCss_fail',
     })
-    const indexFile = files.find(f => f.path === 'index.html') || files.find(f => f.path.endsWith('.html'))
-    if (indexFile) {
-      const known = new Set(files.map(f => f.path))
-      const refs = [...(indexFile.content || '').matchAll(/(?:href|src)=["']([^"'#?]+)["']/gi)]
-        .map(m => m[1].replace(/^\.\//, ''))
-        .filter(r => !/^(https?:)?\/\/|^data:|^mailto:|^tel:/i.test(r))
-      const missing = refs.filter(r => !known.has(r))
+    const pages = listPages(getFiles())
+    if (pages.length > 0) {
+      const all = getFiles()
+      const missing = [...new Set(pages.flatMap(pg => findBrokenRefs(all, pg)))]
+      const critical = missing.filter(r => !/\.(png|jpe?g|gif|webp|avif|ico|svg|woff2?|ttf|otf|mp4|webm|mp3|pdf)$/i.test(r.replace(/[?#].*$/, '')))
       checks.push({
         id: 'brokenRefs',
         labelKey: 'tc_brokenRefs',
-        ok: missing.length === 0,
-        detail: missing.length === 0 ? 'tc_brokenRefs_ok' : missing.slice(0, 5).join(', '),
+        ok: critical.length === 0,
+        detail: critical.length === 0 ? 'tc_brokenRefs_ok' : critical.slice(0, 5).join(', '),
       })
     }
     checks.push({
@@ -681,7 +676,7 @@ Created with Rahsaz.
     if (!activeProject) return
     const label = snapLabel.trim() || new Date().toLocaleString()
     const snap: VersionSnapshot = {
-      id: crypto.randomUUID(),
+      id: uid(),
       label,
       note: snapNote.trim(),
       createdAt: new Date().toISOString(),
@@ -706,13 +701,19 @@ Created with Rahsaz.
   const handleRestoreSnapshot = useCallback((snap: VersionSnapshot) => {
     if (!activeProject) return
     if (!window.confirm(t.confirmRestore)) return
+    // safety net: keep the current state as a snapshot so a restore can itself be undone
+    const backup: VersionSnapshot = {
+      id: uid(), label: (isFa ? 'پیش از بازیابی — ' : 'Before restore — ') + new Date().toLocaleString(isFa ? 'fa-IR' : 'en-US'),
+      note: '', createdAt: new Date().toISOString(), files: getFiles().map(f => ({ ...f })), stage: activeProject.stage,
+    }
+    const keep = [backup, ...(activeProject.versions?.snapshots || [])].slice(0, 20)
     const filesData: FilesData = {
       files: snap.files.map(f => ({ ...f })),
       updatedAt: new Date().toISOString(),
     }
     const result = storageUpdate(
       activeProject.id,
-      { files: filesData, stage: snap.stage },
+      { files: filesData, stage: snap.stage, versions: { snapshots: keep, updatedAt: new Date().toISOString() } },
       projects
     )
     if (result.ok) {
@@ -725,7 +726,7 @@ Created with Rahsaz.
       setSaveMessage(t.snapshotRestored)
       setTimeout(() => setSaveMessage(''), 2500)
     } else setStorageError(result.error)
-  }, [activeProject, projects, t])
+  }, [activeProject, projects, t, isFa, getFiles])
 
   const handleDeleteSnapshot = useCallback((id: string) => {
     if (!activeProject) return
@@ -777,6 +778,22 @@ Created with Rahsaz.
     } else setStorageError(result.error)
   }, [activeProject, projects, t])
 
+  const handleImportBackup = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      const raw = JSON.parse(await file.text())
+      const result = storageImport(raw, projects)
+      if (!result.ok) { setImportMsg(isFa ? 'فایل پشتیبان معتبر نیست.' : 'Invalid backup file.'); return }
+      setProjects(result.data)
+      setImportMsg(isFa ? 'پروژه درون‌ریزی شد.' : 'Project imported.')
+    } catch {
+      setImportMsg(isFa ? 'فایل پشتیبان معتبر نیست.' : 'Invalid backup file.')
+    }
+    setTimeout(() => setImportMsg(''), 3500)
+  }, [projects, isFa])
+
   const handleControlDocs = useCallback(() => {
     if (!activeProject) return
     const docs = buildControlDocs(activeProject, k => (t[k as keyof TranslationKeys] as string) || k, isFa)
@@ -788,7 +805,7 @@ Created with Rahsaz.
         // never overwrite hand-edited spec/decisions; status is regenerated
         if (d.path === 'docs/status.txt') files = files.map(f => f.id === existing.id ? { ...f, content: d.content, updatedAt: now } : f)
       } else {
-        files.push({ id: crypto.randomUUID(), path: d.path, kind: 'file', content: d.content, updatedAt: now })
+        files.push({ id: uid(), path: d.path, kind: 'file', content: d.content, updatedAt: now })
       }
     }
     persistFiles(files.sort((a, b) => a.path.localeCompare(b.path)))
@@ -1405,49 +1422,7 @@ Created with Rahsaz.
                   </div>
                 </div>
 
-                <div className="preview-toolbar">
-                  <span className="preview-label">{t.previewViewport}</span>
-                  <div className="segmented">
-                    <button type="button" className={viewport === 'desktop' ? 'selected' : ''} onClick={() => setViewport('desktop')}>
-                      <Monitor size={14} /> {t.viewportDesktop}
-                    </button>
-                    <button type="button" className={viewport === 'tablet' ? 'selected' : ''} onClick={() => setViewport('tablet')}>
-                      <Tablet size={14} /> {t.viewportTablet}
-                    </button>
-                    <button type="button" className={viewport === 'mobile' ? 'selected' : ''} onClick={() => setViewport('mobile')}>
-                      <Smartphone size={14} /> {t.viewportMobile}
-                    </button>
-                  </div>
-                  <button type="button" className="secondary-button" onClick={() => setPreviewKey(k => k + 1)}>
-                    {t.refreshPreview}
-                  </button>
-                </div>
-                <p className="ai-hint">{t.previewSandboxNote}</p>
-
-                {(() => {
-                  const html = buildPreviewHtml(getFiles())
-                  if (!html) {
-                    return (
-                      <div className="empty-state" style={{ marginTop: 16 }}>
-                        <div className="empty-icon"><Eye size={22} /></div>
-                        <strong>{t.noHtmlPreview}</strong>
-                      </div>
-                    )
-                  }
-                  const width = viewport === 'mobile' ? 375 : viewport === 'tablet' ? 768 : '100%'
-                  return (
-                    <div className="preview-frame-wrap">
-                      <iframe
-                        key={previewKey}
-                        title="preview"
-                        className="preview-frame"
-                        style={{ width }}
-                        sandbox="allow-scripts"
-                        srcDoc={html}
-                      />
-                    </div>
-                  )
-                })()}
+                <PreviewPane files={getFiles()} dirty={editorDirty} isFa={isFa} resetKey={previewKey} />
 
                 <div className="ai-block" style={{ marginTop: 28 }}>
                   <h3 className="ai-block-title">{t.qaTitle}</h3>
@@ -1912,8 +1887,15 @@ Created with Rahsaz.
             <section className="page-section">
               <div className="page-title-row">
                 <div><div className="eyebrow">{isFa ? 'مدیریت پروژه‌ها' : 'PROJECT MANAGEMENT'}</div><h1>{t.projects}</h1></div>
-                <button className="primary-button" onClick={() => setShowCreate(true)}><Plus size={17} />{t.newProject}</button>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <label className="secondary-button" style={{ cursor: 'pointer' }}>
+                    <Upload size={16} />{isFa ? 'درون‌ریزی پشتیبان' : 'Import backup'}
+                    <input type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={handleImportBackup} />
+                  </label>
+                  <button className="primary-button" onClick={() => setShowCreate(true)}><Plus size={17} />{t.newProject}</button>
+                </div>
               </div>
+              {importMsg && <div className="save-toast" style={{ display: 'inline-block', marginBottom: 14 }}>{importMsg}</div>}
               {projects.length > 0 ? (
                 <div className="project-grid">
                   {projects.map(p => (
@@ -1952,6 +1934,17 @@ Created with Rahsaz.
                   <button className={theme === 'dark' ? 'selected' : ''} onClick={() => setTheme('dark')}>{t.dark}</button>
                 </div>
               </div>
+              {(() => {
+                const u = storageUsage()
+                const pct = Math.min(100, Math.round((u.bytes / u.limit) * 100))
+                return (
+                  <div className="settings-panel" style={{ display: 'block' }}>
+                    <strong>{isFa ? 'فضای ذخیره‌سازی مرورگر' : 'Browser storage used'}</strong>
+                    <p>{(u.bytes / 1024).toFixed(0)} KB / ~{(u.limit / 1024 / 1024).toFixed(0)} MB ({pct}%) {pct >= 70 ? (isFa ? '— نزدیک پر شدن است؛ پشتیبان بگیرید و نسخه‌های قدیمی را پاک کنید.' : '— almost full; export a backup and delete old snapshots.') : ''}</p>
+                    <div className="discovery-progress-bar" style={{ margin: '6px 0 0', height: 8 }}><div className="discovery-progress-fill" style={{ width: pct + '%' }} /></div>
+                  </div>
+                )
+              })()}
               <div className="settings-panel">
                 <div><strong>{isFa ? 'نسخه و ذخیره‌سازی' : 'Version & storage'}</strong><p>{t.localNotice}</p></div>
                 <div style={{ textAlign: isFa ? 'left' : 'right', color: 'var(--muted)', fontSize: 13 }}>
@@ -1971,7 +1964,7 @@ Created with Rahsaz.
               <div><div className="eyebrow">{isFa ? 'شروع جدید' : 'NEW START'}</div><h2>{t.newProject}</h2></div>
               <button className="icon-button" onClick={() => setShowCreate(false)}><X size={19} /></button>
             </div>
-            <label><span>{t.projectName}</span><input value={name} onChange={e => setName(e.target.value)} placeholder={isFa ? 'مثلاً فروشگاه شخصی' : 'e.g. Personal store'} /></label>
+            <label><span>{t.projectName}</span><input autoFocus value={name} onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreate() }} placeholder={isFa ? 'مثلاً فروشگاه شخصی' : 'e.g. Personal store'} /></label>
             <label>
               <span>{t.projectType}</span>
               <select value={type} onChange={e => setType(e.target.value as ProjectType)}>

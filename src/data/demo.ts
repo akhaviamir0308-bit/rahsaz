@@ -1,6 +1,7 @@
 /**
  * Demo project (résumé site) + project control-log generator.
  */
+import { uid } from '../uid'
 import type { Project, ProjectFile, Task, DiscoveryAnswer } from '../types'
 
 type Lang = 'fa' | 'en'
@@ -9,7 +10,7 @@ export function buildDemo(lang: Lang) {
   const fa = lang === 'fa'
   const now = new Date().toISOString()
   const mk = (path: string, content: string): ProjectFile =>
-    ({ id: crypto.randomUUID(), path, kind: 'file', content, updatedAt: now })
+    ({ id: uid(), path, kind: 'file', content, updatedAt: now })
 
   const name = fa ? 'سایت رزومه نمونه (کاربر)' : 'Sample résumé site (Kaarbar)'
   const description = fa
@@ -142,7 +143,7 @@ footer { text-align:center; padding:30px; font-size:13px; opacity:.6; }
   const tasks: Task[] = (fa
     ? ['نوشتن متن «درباره من» با نام و تخصص خودم', 'جایگزینی کارت‌های نمونه‌کار با کارهای واقعی', 'تغییر ایمیل و لینک شبکه‌های اجتماعی', 'تست روی موبایل', 'آنلاین‌کردن و فرستادن لینک برای یک دوست']
     : ['Write my own About text', 'Replace portfolio cards with real work', 'Change the email and social links', 'Test on mobile', 'Go online and send the link to a friend']
-  ).map(title => ({ id: crypto.randomUUID(), title, done: false, createdAt: now }))
+  ).map(title => ({ id: uid(), title, done: false, createdAt: now }))
 
   const files: ProjectFile[] = [
     mk('index.html', html), mk('styles.css', css), mk('main.js', js),
