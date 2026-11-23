@@ -1,6 +1,5 @@
 /**
- * Core types for RahSaz v0.2.1
- * Expanded in Phase 0 for better data model and future modules.
+ * Core types for RahSaz v0.3.0 — Phase 1 (Project Workspace)
  */
 
 export type Language = 'fa' | 'en'
@@ -29,6 +28,14 @@ export type ProjectStage =
 /** Overall status of a project */
 export type ProjectStatus = 'active' | 'archived' | 'completed'
 
+/** Simple task inside a project workspace */
+export interface Task {
+  id: string
+  title: string
+  done: boolean
+  createdAt: string
+}
+
 /**
  * Main Project entity.
  * All related data (requirements, files, conversations, ...) will reference this id.
@@ -44,6 +51,8 @@ export interface Project {
   status: ProjectStatus
   /** Optional language preference for the generated website content */
   language?: Language
+  /** Simple task list for Phase 1 */
+  tasks?: Task[]
 }
 
 /** Result shape for storage operations */

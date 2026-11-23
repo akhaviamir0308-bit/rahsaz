@@ -1,5 +1,5 @@
 /**
- * Persistence layer for RahSaz (Phase 0)
+ * Persistence layer for RahSaz (Phase 1)
  *
  * Current implementation: localStorage with versioned key + simple migration.
  * Designed so we can later swap the backend to IndexedDB without changing callers.
@@ -10,10 +10,11 @@
  * - Support basic migration from older formats
  */
 
-import type { Project, StorageResult } from './types'
+import type { Project, StorageResult, Task } from './types'
 
-const STORAGE_KEY = 'rahsaz.projects.v021'
-const LEGACY_KEY = 'rahsaz.projects.v020'
+const STORAGE_KEY = 'rahsaz.projects.v030'
+const LEGACY_KEY_021 = 'rahsaz.projects.v021'
+const LEGACY_KEY_020 = 'rahsaz.projects.v020'
 
 /** Read raw projects array from localStorage */
 function readRaw(): unknown {
@@ -21,14 +22,24 @@ function readRaw(): unknown {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) return JSON.parse(raw)
 
-    // One-time migration from v0.2.0 key
-    const legacy = localStorage.getItem(LEGACY_KEY)
-    if (legacy) {
-      const parsed = JSON.parse(legacy)
+    // Migration from v0.2.1
+    const legacy021 = localStorage.getItem(LEGACY_KEY_021)
+    if (legacy021) {
+      const parsed = JSON.parse(legacy021)
       if (Array.isArray(parsed)) {
-        const migrated = parsed.map(migrateLegacyProject)
+        const migrated = parsed.map(migrateProject)
         localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated))
-        // Keep legacy for safety; can be removed in a later version
+        return migrated
+      }
+    }
+
+    // Migration from v0.2.0
+    const legacy020 = localStorage.getItem(LEGACY_KEY_020)
+    if (legacy020) {
+      const parsed = JSON.parse(legacy020)
+      if (Array.isArray(parsed)) {
+        const migrated = parsed.map(migrateProject)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated))
         return migrated
       }
     }
@@ -38,8 +49,8 @@ function readRaw(): unknown {
   }
 }
 
-/** Migrate a v0.2.0 project shape to the new model */
-function migrateLegacyProject(p: any): Project {
+/** Migrate any older project shape to the current model */
+function migrateProject(p: any): Project {
   const now = new Date().toISOString()
   return {
     id: typeof p.id === 'string' ? p.id : crypto.randomUUID(),
@@ -51,6 +62,17 @@ function migrateLegacyProject(p: any): Project {
     stage: p.stage || 'discovery',
     status: p.status || 'active',
     language: p.language === 'en' || p.language === 'fa' ? p.language : undefined,
+    tasks: Array.isArray(p.tasks) ? p.tasks.map(normalizeTask).filter(Boolean) as Task[] : [],
+  }
+}
+
+function normalizeTask(t: any): Task | null {
+  if (!t || typeof t !== 'object' || typeof t.id !== 'string' || typeof t.title !== 'string') return null
+  return {
+    id: t.id,
+    title: t.title,
+    done: Boolean(t.done),
+    createdAt: typeof t.createdAt === 'string' ? t.createdAt : new Date().toISOString(),
   }
 }
 
@@ -71,6 +93,7 @@ function normalizeProject(p: any): Project | null {
     stage: p.stage || 'discovery',
     status: p.status || 'active',
     language: p.language === 'en' || p.language === 'fa' ? p.language : undefined,
+    tasks: Array.isArray(p.tasks) ? p.tasks.map(normalizeTask).filter(Boolean) as Task[] : [],
   }
 }
 
@@ -99,7 +122,6 @@ export function saveProjects(projects: Project[]): StorageResult<void> {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
     return { ok: true, data: undefined }
   } catch (err) {
-    // QuotaExceededError or security errors
     return {
       ok: false,
       error: err instanceof Error ? err.message : 'Failed to save projects',
@@ -133,6 +155,7 @@ export function createProject(
     stage: 'discovery',
     status: 'active',
     language: input.language,
+    tasks: [],
   }
 
   const next = [project, ...current]
@@ -155,7 +178,7 @@ export function deleteProject(
 /** Update an existing project (partial) */
 export function updateProject(
   id: string,
-  patch: Partial<Pick<Project, 'name' | 'description' | 'type' | 'stage' | 'status' | 'language'>>,
+  patch: Partial<Pick<Project, 'name' | 'description' | 'type' | 'stage' | 'status' | 'language' | 'tasks'>>,
   current: Project[]
 ): StorageResult<Project[]> {
   const index = current.findIndex((p) => p.id === id)
@@ -170,12 +193,12 @@ export function updateProject(
     updatedAt: now,
   }
 
-  // Basic validation
   if (patch.name !== undefined && !patch.name.trim()) {
     return { ok: false, error: 'EMPTY_NAME' }
   }
   if (patch.name) updated.name = patch.name.trim()
   if (patch.description !== undefined) updated.description = patch.description.trim()
+  if (patch.tasks !== undefined) updated.tasks = patch.tasks
 
   const next = [...current]
   next[index] = updated
@@ -184,11 +207,6 @@ export function updateProject(
   return { ok: true, data: next }
 }
 
-/**
- * Future: IndexedDB adapter skeleton.
- * Callers should keep using the functions above.
- * When ready, implement load/save with IDB and keep the same signatures.
- */
 export const storageInfo = {
   backend: 'localStorage' as const,
   key: STORAGE_KEY,

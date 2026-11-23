@@ -2,14 +2,16 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import {
   Compass, FolderKanban, BookOpen, Settings, Plus, Sun, Moon,
   Languages, Sparkles, ArrowUpLeft, Trash2, X, Layers3,
-  WandSparkles, Code2, Rocket, PanelLeftClose, AlertTriangle
+  WandSparkles, Code2, Rocket, PanelLeftClose, AlertTriangle,
+  ArrowRight, CheckCircle2, Circle, ListTodo, Info, ChevronLeft
 } from 'lucide-react'
-import type { Language, Project, ProjectType, Theme } from './types'
+import type { Language, Project, ProjectType, ProjectStage, ProjectStatus, Theme, Task } from './types'
 import { getTranslations, type TranslationKeys } from './data/translations'
 import {
   loadProjects,
   createProject as storageCreate,
   deleteProject as storageDelete,
+  updateProject as storageUpdate,
   storageInfo,
 } from './storage'
 
@@ -18,7 +20,14 @@ const projectTypes: ProjectType[] = [
   'blog', 'booking', 'community', 'webapp'
 ]
 
+const stages: ProjectStage[] = [
+  'discovery', 'planning', 'design', 'development', 'testing', 'published'
+]
+
+const statuses: ProjectStatus[] = ['active', 'archived', 'completed']
+
 type PageId = 'overview' | 'projects' | 'guide' | 'settings'
+type WorkspaceTab = 'overview' | 'tasks' | 'settings'
 
 export default function App() {
   const [language, setLanguage] = useState<Language>(
@@ -38,11 +47,26 @@ export default function App() {
   const [description, setDescription] = useState('')
   const [formError, setFormError] = useState('')
 
-  // Delete confirmation state
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null)
+
+  // Phase 1: Project Workspace
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('overview')
+  const [editName, setEditName] = useState('')
+  const [editDesc, setEditDesc] = useState('')
+  const [editType, setEditType] = useState<ProjectType>('portfolio')
+  const [editStage, setEditStage] = useState<ProjectStage>('discovery')
+  const [editStatus, setEditStatus] = useState<ProjectStatus>('active')
+  const [newTaskTitle, setNewTaskTitle] = useState('')
+  const [saveMessage, setSaveMessage] = useState('')
 
   const t = useMemo(() => getTranslations(language), [language])
   const isFa = language === 'fa'
+
+  const activeProject = useMemo(
+    () => projects.find(p => p.id === activeProjectId) || null,
+    [projects, activeProjectId]
+  )
 
   // Initial load
   useEffect(() => {
@@ -70,12 +94,26 @@ export default function App() {
     localStorage.setItem('rahsaz.theme', theme)
   }, [theme])
 
+  const openProject = useCallback((project: Project) => {
+    setActiveProjectId(project.id)
+    setWorkspaceTab('overview')
+    setEditName(project.name)
+    setEditDesc(project.description)
+    setEditType(project.type)
+    setEditStage(project.stage)
+    setEditStatus(project.status)
+    setSaveMessage('')
+    setNewTaskTitle('')
+  }, [])
+
+  const closeProject = useCallback(() => {
+    setActiveProjectId(null)
+    setActivePage('projects')
+  }, [])
+
   const handleCreate = useCallback(() => {
     setFormError('')
-    const result = storageCreate(
-      { name, type, description },
-      projects
-    )
+    const result = storageCreate({ name, type, description }, projects)
     if (!result.ok) {
       if (result.error === 'EMPTY_NAME') {
         setFormError(t.emptyName)
@@ -90,8 +128,10 @@ export default function App() {
     setDescription('')
     setType('portfolio')
     setShowCreate(false)
-    setActivePage('projects')
-  }, [name, type, description, projects, t])
+    // Auto-open the new project
+    const created = result.data[0]
+    if (created) openProject(created)
+  }, [name, type, description, projects, t, openProject])
 
   const requestDelete = useCallback((project: Project) => {
     setDeleteTarget(project)
@@ -102,12 +142,74 @@ export default function App() {
     const result = storageDelete(deleteTarget.id, projects)
     if (result.ok) {
       setProjects(result.data)
+      if (activeProjectId === deleteTarget.id) {
+        setActiveProjectId(null)
+      }
       setDeleteTarget(null)
     } else {
       setStorageError(result.error)
       setDeleteTarget(null)
     }
-  }, [deleteTarget, projects])
+  }, [deleteTarget, projects, activeProjectId])
+
+  const handleSaveProject = useCallback(() => {
+    if (!activeProject) return
+    const result = storageUpdate(
+      activeProject.id,
+      {
+        name: editName,
+        description: editDesc,
+        type: editType,
+        stage: editStage,
+        status: editStatus,
+      },
+      projects
+    )
+    if (result.ok) {
+      setProjects(result.data)
+      setSaveMessage(t.changesSaved)
+      setTimeout(() => setSaveMessage(''), 2500)
+    } else {
+      if (result.error === 'EMPTY_NAME') setFormError(t.emptyName)
+      else setStorageError(result.error)
+    }
+  }, [activeProject, editName, editDesc, editType, editStage, editStatus, projects, t])
+
+  const handleAddTask = useCallback(() => {
+    if (!activeProject || !newTaskTitle.trim()) return
+    const task: Task = {
+      id: crypto.randomUUID(),
+      title: newTaskTitle.trim(),
+      done: false,
+      createdAt: new Date().toISOString(),
+    }
+    const tasks = [...(activeProject.tasks || []), task]
+    const result = storageUpdate(activeProject.id, { tasks }, projects)
+    if (result.ok) {
+      setProjects(result.data)
+      setNewTaskTitle('')
+    } else {
+      setStorageError(result.error)
+    }
+  }, [activeProject, newTaskTitle, projects])
+
+  const handleToggleTask = useCallback((taskId: string) => {
+    if (!activeProject) return
+    const tasks = (activeProject.tasks || []).map(tk =>
+      tk.id === taskId ? { ...tk, done: !tk.done } : tk
+    )
+    const result = storageUpdate(activeProject.id, { tasks }, projects)
+    if (result.ok) setProjects(result.data)
+    else setStorageError(result.error)
+  }, [activeProject, projects])
+
+  const handleDeleteTask = useCallback((taskId: string) => {
+    if (!activeProject) return
+    const tasks = (activeProject.tasks || []).filter(tk => tk.id !== taskId)
+    const result = storageUpdate(activeProject.id, { tasks }, projects)
+    if (result.ok) setProjects(result.data)
+    else setStorageError(result.error)
+  }, [activeProject, projects])
 
   const nav = [
     { id: 'overview' as const, label: t.overview, icon: Compass },
@@ -124,6 +226,279 @@ export default function App() {
     )
   }
 
+  // ========== PROJECT WORKSPACE ==========
+  if (activeProject) {
+    const tasks = activeProject.tasks || []
+    const doneCount = tasks.filter(tk => tk.done).length
+    const progressPct = tasks.length === 0 ? 0 : Math.round((doneCount / tasks.length) * 100)
+
+    return (
+      <div className="app-shell">
+        <aside className="sidebar">
+          <div className="brand-row">
+            <div className="brand-mark"><WandSparkles size={21} /></div>
+            <div>
+              <div className="brand-name">{t.brand}</div>
+              <div className="brand-caption">PROJECT WORKSPACE</div>
+            </div>
+          </div>
+
+          <button className="secondary-button back-btn" onClick={closeProject} style={{ width: '100%', marginBottom: 20 }}>
+            <ChevronLeft size={16} />
+            {t.backToProjects}
+          </button>
+
+          <div className="nav-label">{t.projectWorkspace}</div>
+          <nav className="nav-list">
+            {[
+              { id: 'overview' as const, label: t.projectOverview, icon: Info },
+              { id: 'tasks' as const, label: t.projectTasks, icon: ListTodo },
+              { id: 'settings' as const, label: t.projectSettings, icon: Settings },
+            ].map(item => {
+              const Icon = item.icon
+              return (
+                <button
+                  key={item.id}
+                  className={`nav-item ${workspaceTab === item.id ? 'active' : ''}`}
+                  onClick={() => setWorkspaceTab(item.id)}
+                >
+                  <Icon size={18} /><span>{item.label}</span>
+                </button>
+              )
+            })}
+          </nav>
+
+          <div className="sidebar-bottom">
+            <div className="help-card">
+              <Sparkles size={18} />
+              <strong>{activeProject.name}</strong>
+              <p>{t[activeProject.stage]} · {t[`status${activeProject.status.charAt(0).toUpperCase() + activeProject.status.slice(1)}` as keyof TranslationKeys] || activeProject.status}</p>
+            </div>
+          </div>
+        </aside>
+
+        <main className="main-area">
+          <header className="topbar">
+            <div className="breadcrumb">
+              {t.brand}<span>/</span>
+              <strong>{activeProject.name}</strong>
+              <span>/</span>
+              <span>{workspaceTab === 'overview' ? t.projectOverview : workspaceTab === 'tasks' ? t.projectTasks : t.projectSettings}</span>
+            </div>
+            <div className="top-actions">
+              <button className="icon-button" title={t.language} onClick={() => setLanguage(language === 'fa' ? 'en' : 'fa')}>
+                <Languages size={18} /><span>{language === 'fa' ? 'EN' : 'فا'}</span>
+              </button>
+              <button className="icon-button" title={t.theme} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+            </div>
+          </header>
+
+          {storageError && (
+            <div className="storage-error-banner" role="alert">
+              <AlertTriangle size={16} />
+              <span>{t.storageError}</span>
+              <button onClick={() => setStorageError(null)} aria-label="Dismiss">×</button>
+            </div>
+          )}
+
+          <div className="content">
+            {/* OVERVIEW TAB */}
+            {workspaceTab === 'overview' && (
+              <section className="page-section">
+                <div className="page-title-row">
+                  <div>
+                    <div className="eyebrow">{t.projectInfo}</div>
+                    <h1>{activeProject.name}</h1>
+                    <p style={{ color: 'var(--muted)', marginTop: 6 }}>
+                      {activeProject.description || t[activeProject.type]}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="stats-grid" style={{ marginTop: 24 }}>
+                  <div className="stat-card">
+                    <span>{t.stage}</span>
+                    <strong style={{ fontSize: 16 }}>{t[activeProject.stage]}</strong>
+                    <small>{t.changeStage}</small>
+                  </div>
+                  <div className="stat-card">
+                    <span>{t.status}</span>
+                    <strong style={{ fontSize: 16 }}>
+                      {t[`status${activeProject.status.charAt(0).toUpperCase() + activeProject.status.slice(1)}` as keyof TranslationKeys]}
+                    </strong>
+                    <small>{t.changeStatus}</small>
+                  </div>
+                  <div className="stat-card">
+                    <span>{t.progress}</span>
+                    <strong style={{ fontSize: 16 }}>{progressPct}%</strong>
+                    <small>{doneCount} / {tasks.length} {t.tasksCompleted}</small>
+                  </div>
+                </div>
+
+                <div className="section-block" style={{ marginTop: 28 }}>
+                  <div className="section-heading">
+                    <div>
+                      <h2>{t.howItWorks}</h2>
+                      <p>{isFa ? 'مرحله فعلی پروژه مشخص شده است' : 'Current project stage is highlighted'}</p>
+                    </div>
+                  </div>
+                  <div className="steps-grid">
+                    {stages.map((s, i) => {
+                      const active = activeProject.stage === s
+                      const passed = stages.indexOf(activeProject.stage) > i
+                      return (
+                        <div
+                          key={s}
+                          className={`step-card ${active ? 'step-active' : ''} ${passed ? 'step-passed' : ''}`}
+                        >
+                          <div className="step-top">
+                            <span>0{i + 1}</span>
+                            {passed || active ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                          </div>
+                          <strong>{t[s]}</strong>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="meta-row" style={{ marginTop: 24, color: 'var(--muted)', fontSize: 13 }}>
+                  <span>{t.createdAt}: {new Date(activeProject.createdAt).toLocaleDateString(isFa ? 'fa-IR' : 'en-US')}</span>
+                  <span style={{ marginInline: 12 }}>·</span>
+                  <span>{t.lastUpdated}: {new Date(activeProject.updatedAt).toLocaleDateString(isFa ? 'fa-IR' : 'en-US')}</span>
+                </div>
+              </section>
+            )}
+
+            {/* TASKS TAB */}
+            {workspaceTab === 'tasks' && (
+              <section className="page-section">
+                <div className="page-title-row">
+                  <div>
+                    <div className="eyebrow">{t.projectTasks}</div>
+                    <h1>{t.projectTasks}</h1>
+                    <p style={{ color: 'var(--muted)' }}>
+                      {doneCount} / {tasks.length} {t.tasksCompleted}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="task-add-row">
+                  <input
+                    type="text"
+                    value={newTaskTitle}
+                    onChange={e => setNewTaskTitle(e.target.value)}
+                    placeholder={t.taskPlaceholder}
+                    onKeyDown={e => { if (e.key === 'Enter') handleAddTask() }}
+                  />
+                  <button className="primary-button" onClick={handleAddTask} disabled={!newTaskTitle.trim()}>
+                    <Plus size={16} />
+                    {t.addTask}
+                  </button>
+                </div>
+
+                {tasks.length === 0 ? (
+                  <div className="empty-state" style={{ marginTop: 32 }}>
+                    <div className="empty-icon"><ListTodo size={25} /></div>
+                    <strong>{t.noTasks}</strong>
+                  </div>
+                ) : (
+                  <div className="task-list">
+                    {tasks.map(task => (
+                      <div key={task.id} className={`task-item ${task.done ? 'done' : ''}`}>
+                        <button
+                          className="task-check"
+                          onClick={() => handleToggleTask(task.id)}
+                          aria-label={task.done ? t.taskDone : t.taskPending}
+                        >
+                          {task.done ? <CheckCircle2 size={20} /> : <Circle size={20} />}
+                        </button>
+                        <span className="task-title">{task.title}</span>
+                        <button
+                          className="delete-button"
+                          onClick={() => handleDeleteTask(task.id)}
+                          title={t.deleteTask}
+                          aria-label={t.deleteTask}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* SETTINGS TAB */}
+            {workspaceTab === 'settings' && (
+              <section className="page-section">
+                <div className="page-title-row">
+                  <div>
+                    <div className="eyebrow">{t.projectSettings}</div>
+                    <h1>{t.editProject}</h1>
+                  </div>
+                  {saveMessage && (
+                    <span className="save-toast">{saveMessage}</span>
+                  )}
+                </div>
+
+                <div className="settings-form">
+                  <label>
+                    <span>{t.projectName}</span>
+                    <input value={editName} onChange={e => setEditName(e.target.value)} />
+                  </label>
+
+                  <label>
+                    <span>{t.description}</span>
+                    <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} rows={3} />
+                  </label>
+
+                  <label>
+                    <span>{t.projectType}</span>
+                    <select value={editType} onChange={e => setEditType(e.target.value as ProjectType)}>
+                      {projectTypes.map(pt => (
+                        <option key={pt} value={pt}>{t[pt]}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>{t.stage}</span>
+                    <select value={editStage} onChange={e => setEditStage(e.target.value as ProjectStage)}>
+                      {stages.map(s => (
+                        <option key={s} value={s}>{t[s]}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>{t.status}</span>
+                    <select value={editStatus} onChange={e => setEditStatus(e.target.value as ProjectStatus)}>
+                      {statuses.map(s => (
+                        <option key={s} value={s}>
+                          {t[`status${s.charAt(0).toUpperCase() + s.slice(1)}` as keyof TranslationKeys]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="modal-actions" style={{ justifyContent: 'flex-start', marginTop: 12 }}>
+                    <button className="primary-button" onClick={handleSaveProject}>
+                      {t.saveChanges}
+                    </button>
+                  </div>
+                </div>
+              </section>
+            )}
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  // ========== MAIN DASHBOARD ==========
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -179,19 +554,10 @@ export default function App() {
             <strong>{nav.find(n => n.id === activePage)?.label}</strong>
           </div>
           <div className="top-actions">
-            <button
-              className="icon-button"
-              title={t.language}
-              onClick={() => setLanguage(language === 'fa' ? 'en' : 'fa')}
-            >
-              <Languages size={18} />
-              <span>{language === 'fa' ? 'EN' : 'فا'}</span>
+            <button className="icon-button" title={t.language} onClick={() => setLanguage(language === 'fa' ? 'en' : 'fa')}>
+              <Languages size={18} /><span>{language === 'fa' ? 'EN' : 'فا'}</span>
             </button>
-            <button
-              className="icon-button"
-              title={t.theme}
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            >
+            <button className="icon-button" title={t.theme} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>
             <div className="status-pill">
@@ -305,12 +671,13 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="project-grid">
-                    {projects.slice(0, 3).map(p => (
+                    {projects.slice(0, 4).map(p => (
                       <ProjectCard
                         key={p.id}
                         project={p}
                         t={t}
                         isFa={isFa}
+                        onOpen={() => openProject(p)}
                         onDelete={() => requestDelete(p)}
                       />
                     ))}
@@ -324,15 +691,15 @@ export default function App() {
             <section className="page-section">
               <div className="page-title-row">
                 <div>
-                  <div className="eyebrow">{isFa ? 'مدیریت فضای کاری' : 'WORKSPACE MANAGEMENT'}</div>
+                  <div className="eyebrow">{isFa ? 'مدیریت پروژه‌ها' : 'PROJECT MANAGEMENT'}</div>
                   <h1>{t.projects}</h1>
-                  <p>{isFa ? 'پروژه‌هایت را در یک مکان سازمان‌دهی کن.' : 'Organize all your website projects in one place.'}</p>
                 </div>
                 <button className="primary-button" onClick={() => setShowCreate(true)}>
                   <Plus size={17} />{t.newProject}
                 </button>
               </div>
-              {projects.length ? (
+
+              {projects.length > 0 ? (
                 <div className="project-grid">
                   {projects.map(p => (
                     <ProjectCard
@@ -340,6 +707,7 @@ export default function App() {
                       project={p}
                       t={t}
                       isFa={isFa}
+                      onOpen={() => openProject(p)}
                       onDelete={() => requestDelete(p)}
                     />
                   ))}
@@ -402,37 +770,27 @@ export default function App() {
 
               <div className="settings-panel">
                 <div>
-                  <strong>{isFa ? 'حالت تجربه کاربری' : 'Experience mode'}</strong>
-                  <p>{t.modeText}</p>
+                  <strong>{isFa ? 'نسخه و ذخیره‌سازی' : 'Version & storage'}</strong>
+                  <p>{t.localNotice}</p>
                 </div>
-                <span className="mode-badge">{isFa ? 'ترکیبی' : 'Hybrid'}</span>
-              </div>
-
-              <div className="settings-panel">
-                <div>
-                  <strong>{isFa ? 'ذخیره‌سازی' : 'Storage'}</strong>
-                  <p>{isFa ? 'وضعیت فعلی لایه persistence' : 'Current persistence backend'}</p>
+                <div style={{ textAlign: isFa ? 'left' : 'right', color: 'var(--muted)', fontSize: 13 }}>
+                  <div>{t.versionLabel}</div>
+                  <div>{storageInfo.backend}</div>
                 </div>
-                <span className="mode-badge">{storageInfo.backend}</span>
               </div>
-
-              <p className="privacy-note">{t.localNotice}</p>
             </section>
           )}
         </div>
       </main>
 
-      {/* Create Project Modal */}
+      {/* Create Modal */}
       {showCreate && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={e => { if (e.target === e.currentTarget) setShowCreate(false) }}
-        >
-          <section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowCreate(false) }}>
+          <section className="modal" role="dialog" aria-modal="true">
             <div className="modal-head">
               <div>
-                <div className="eyebrow">{isFa ? 'فضای پروژه جدید' : 'NEW WORKSPACE PROJECT'}</div>
-                <h2 id="modal-title">{t.newProject}</h2>
+                <div className="eyebrow">{isFa ? 'شروع جدید' : 'NEW START'}</div>
+                <h2>{t.newProject}</h2>
               </div>
               <button className="icon-button" onClick={() => setShowCreate(false)} aria-label="Close">
                 <X size={19} />
@@ -440,52 +798,37 @@ export default function App() {
             </div>
 
             <label>
-              {t.projectName}
-              <input
-                value={name}
-                onChange={e => { setName(e.target.value); setFormError('') }}
-                placeholder={isFa ? 'مثلاً وب‌سایت شخصی من' : 'e.g. My personal website'}
-                autoFocus
-              />
+              <span>{t.projectName}</span>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder={isFa ? 'مثلاً فروشگاه شخصی' : 'e.g. Personal store'} />
             </label>
 
             <label>
-              {t.projectType}
+              <span>{t.projectType}</span>
               <select value={type} onChange={e => setType(e.target.value as ProjectType)}>
-                {projectTypes.map(v => (
-                  <option key={v} value={v}>{t[v]}</option>
+                {projectTypes.map(pt => (
+                  <option key={pt} value={pt}>{t[pt]}</option>
                 ))}
               </select>
             </label>
 
             <label>
-              {t.description}
-              <textarea
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                rows={3}
-                placeholder={isFa ? 'چه وب‌سایتی در ذهن داری؟' : 'What do you have in mind?'}
-              />
+              <span>{t.description}</span>
+              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder={isFa ? 'توضیح کوتاه...' : 'Short description...'} />
             </label>
 
-            {formError && <p className="form-error">{formError}</p>}
+            {formError && <div className="form-error">{formError}</div>}
 
             <div className="modal-actions">
               <button className="secondary-button" onClick={() => setShowCreate(false)}>{t.cancel}</button>
-              <button className="primary-button" onClick={handleCreate}>
-                {t.create}<ArrowUpLeft size={16} />
-              </button>
+              <button className="primary-button" onClick={handleCreate}>{t.create}</button>
             </div>
           </section>
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation */}
       {deleteTarget && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={e => { if (e.target === e.currentTarget) setDeleteTarget(null) }}
-        >
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setDeleteTarget(null) }}>
           <section className="modal modal-danger" role="dialog" aria-modal="true" aria-labelledby="delete-title">
             <div className="modal-head">
               <div>
@@ -508,9 +851,7 @@ export default function App() {
             </p>
 
             <div className="modal-actions">
-              <button className="secondary-button" onClick={() => setDeleteTarget(null)}>
-                {t.cancel}
-              </button>
+              <button className="secondary-button" onClick={() => setDeleteTarget(null)}>{t.cancel}</button>
               <button className="danger-button" onClick={confirmDelete}>
                 <Trash2 size={16} />
                 {t.confirmDeleteButton}
@@ -528,20 +869,29 @@ function ProjectCard({
   project,
   t,
   isFa,
+  onOpen,
   onDelete,
 }: {
   project: Project
   t: TranslationKeys
   isFa: boolean
+  onOpen: () => void
   onDelete: () => void
 }) {
   const stageLabel = t[project.stage] || t.discovery
+  const taskCount = project.tasks?.length || 0
+  const doneCount = project.tasks?.filter(tk => tk.done).length || 0
 
   return (
-    <article className="project-card">
+    <article className="project-card" onClick={onOpen} style={{ cursor: 'pointer' }}>
       <div className="project-card-top">
         <div className="project-icon"><FolderKanban size={19} /></div>
-        <button className="delete-button" title={t.delete} onClick={onDelete} aria-label={t.delete}>
+        <button
+          className="delete-button"
+          title={t.delete}
+          onClick={e => { e.stopPropagation(); onDelete() }}
+          aria-label={t.delete}
+        >
           <Trash2 size={16} />
         </button>
       </div>
@@ -549,6 +899,9 @@ function ProjectCard({
       <p>{project.description || t[project.type]}</p>
       <div className="project-card-footer">
         <span className="stage-tag">{stageLabel}</span>
+        {taskCount > 0 && (
+          <small style={{ marginInlineEnd: 8 }}>{doneCount}/{taskCount}</small>
+        )}
         <small>
           {new Date(project.updatedAt || project.createdAt).toLocaleDateString(isFa ? 'fa-IR' : 'en-US')}
         </small>

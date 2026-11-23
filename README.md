@@ -1,26 +1,27 @@
-# Rahsaz — v0.2.1
+# Rahsaz — v0.3.0
 
-A bilingual (Persian/English), theme-switchable starter for an AI-assisted website creation workspace.
+A bilingual (Persian/English), theme-switchable workspace for AI-assisted website creation.
 
-## What changed in 0.2.1 (Phase 0 – Core Stabilization)
+## What changed in 0.3.0 (Phase 1 – Project Workspace)
 
-- **Stronger Project model**: added `updatedAt`, `status`, expanded `stage`
-- **Dedicated storage layer** (`src/storage.ts`) with:
-  - Clean load / create / delete / update API
-  - Automatic migration from v0.2.0 localStorage key
-  - Result-based error handling (no silent failures)
-- **Two-step delete confirmation** modal (prevents accidental data loss)
-- **Better error surface**: storage errors shown to the user
-- **Version badge** and storage backend info in Settings
-- Code structure prepared for future IndexedDB swap and project workspace
+- **Dedicated Project Workspace**: click any project to enter its private workspace
+- **Three workspace tabs**:
+  - Overview — stage progress, status, task completion percentage
+  - Tasks — add, complete, and delete simple tasks
+  - Settings — edit name, description, type, stage, and status
+- **Stage visualization**: six development stages with visual progress
+- **Auto-open** newly created projects
+- **Task progress** shown on project cards
+- Migration from v0.2.0 and v0.2.1 localStorage data
 
 ## Current scope
 - Persian/English interface with automatic RTL/LTR direction
 - Dark/light theme
 - Responsive dashboard
-- Project creation and deletion (with confirmation)
+- Project creation, opening, editing, and deletion (with confirmation)
+- Simple task management per project
 - Browser-local persistence
-- Initial architecture for future guided and professional workflows
+- Foundation for future guided discovery, AI, and file modules
 
 ## Requirements
 - Node.js LTS (includes npm)
@@ -42,4 +43,6 @@ npm run preview
 This is still an early foundation. Project data is stored only in the current browser profile. There is no shared backend, authentication, AI provider connection, code editor, or real deployment engine yet. Do not put private information or API keys into this version.
 
 ## Next phases
-See the technical roadmap document for Phase 1 (Project Workspace) and beyond.
+- Phase 2: Smart discovery / requirements questionnaire
+- Phase 3: AI assistant integration layer
+- Phase 4: File & code management
