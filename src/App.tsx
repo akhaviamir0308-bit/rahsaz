@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import {
-  Compass, FolderKanban, BookOpen, Settings, Plus, Sun, Moon,
+  Compass, FolderKanban, Settings, Plus, Sun, Moon,
   Languages, Sparkles, ArrowUpLeft, Trash2, X, Layers3,
   WandSparkles, Code2, Rocket, PanelLeftClose, AlertTriangle,
   CheckCircle2, Circle, ListTodo, Info, ChevronLeft, ClipboardList,
   Bot, Copy, Check, MessageSquare, FileCode2, FolderPlus, FilePlus2, Eye, Monitor, Smartphone, Tablet,
-  History, FlaskConical, RotateCcw, Upload, Download
+  History, FlaskConical, RotateCcw, Upload, Download, GraduationCap, HelpCircle, ArrowLeft, FileText
 } from 'lucide-react'
 import type {
   Language, Project, ProjectType, ProjectStage, ProjectStatus,
@@ -20,6 +20,9 @@ import {
   deleteProject as storageDelete, updateProject as storageUpdate, storageInfo,
 } from './storage'
 import { buildZip, downloadBlob } from './zip'
+import LearnView from './components/LearnView'
+import type { ActionId } from './data/learn'
+import { buildDemo, buildControlDocs } from './data/demo'
 
 const projectTypes: ProjectType[] = [
   'portfolio', 'business', 'store', 'education',
@@ -31,7 +34,7 @@ const stages: ProjectStage[] = [
 const statuses: ProjectStatus[] = ['active', 'archived', 'completed']
 
 type PageId = 'overview' | 'projects' | 'guide' | 'settings'
-type WorkspaceTab = 'overview' | 'discovery' | 'ai' | 'files' | 'preview' | 'versions' | 'publish' | 'tasks' | 'settings'
+type WorkspaceTab = 'learn' | 'overview' | 'discovery' | 'ai' | 'files' | 'preview' | 'versions' | 'publish' | 'tasks' | 'settings'
 
 /** Build a context block from project + discovery */
 function buildProjectContext(project: Project, t: TranslationKeys, isFa: boolean): string {
@@ -146,6 +149,33 @@ function buildPreviewHtml(files: ProjectFile[]): string | null {
 }
 
 
+const TAB_HELP: Record<string, { lesson: string; fa: string; en: string }> = {
+  discovery: { lesson: 't-discovery', fa: 'به ۸ سؤال کلیدی جواب بدهید (حداقل ۳ پاسخ برای تأیید). پاسخ‌ها خودکار وارد پرامپت‌های دستیار AI می‌شوند. «ذخیره» فقط ذخیره می‌کند؛ «تأیید» پروژه را به مرحله برنامه‌ریزی می‌برد.', en: 'Answer the 8 key questions (at least 3 to confirm). Answers flow into the AI assistant prompts. "Save" only saves; "Confirm" moves the project to Planning.' },
+  ai: { lesson: 't-ai', fa: 'یک کارت انتخاب کنید ← پرامپت را کپی کنید ← در ChatGPT/Claude بچسبانید ← پاسخ را اینجا ذخیره کنید. راه‌ساز مستقیم به هوش مصنوعی وصل نیست؛ مسیر و حافظه کار را نگه می‌دارد.', en: 'Pick a card → copy the prompt → paste it in ChatGPT/Claude → save the answer here. Rahsaz is not directly connected to an AI; it keeps the path and memory of the work.' },
+  files: { lesson: 't-files', fa: 'فایل index.html بسازید یا «ایجاد ساختار اولیه» را بزنید، کد AI را بچسبانید و Ctrl+S بزنید. فایل‌ها فقط متنی‌اند. «دفتر کنترل پروژه» سه فایل مستند می‌سازد.', en: 'Create index.html or click "Create starter structure", paste AI code and press Ctrl+S. Files are text only. "Project control log" creates three documentation files.' },
+  preview: { lesson: 't-preview', fa: 'سایت را در دسکتاپ، تبلت و موبایل ببینید و چک‌لیست کیفیت را تیک بزنید. پیش‌نمایش ایزوله است؛ بازشدن لینک در تب جدید و ارسال فرم را روی نسخه آنلاین تست کنید.', en: 'See the site on desktop, tablet and mobile and tick the QA list. The preview is sandboxed; test links opening in new tabs and form submission on the live site.' },
+  versions: { lesson: 't-versions', fa: 'قبل از هر تغییر بزرگ یک نسخه بگیرید تا اگر خراب شد برگردید. تست‌ها فقط ساختار فایل‌ها را بررسی می‌کنند، نه درستی ظاهر را.', en: 'Take a snapshot before every big change so you can roll back. Tests only check file structure, not whether it looks right.' },
+  publish: { lesson: 't-publish', fa: 'همه موارد آمادگی را سبز کنید، ZIP بگیرید و روی Netlify Drop یا Cloudflare Pages آپلود کنید. دکمه «علامت‌گذاری منتشرشده» فقط وضعیت را عوض می‌کند و سایت را آنلاین نمی‌کند.', en: 'Make every readiness item green, export the ZIP and upload it to Netlify Drop or Cloudflare Pages. "Mark as published" only changes status; it does not put the site online.' },
+  tasks: { lesson: 't-tasks', fa: 'کارهای کوچک را اینجا بنویسید و تیک بزنید؛ درصد پیشرفت در نمای کلی دیده می‌شود.', en: 'Write small jobs here and tick them off; progress shows in the overview.' },
+  settings: { lesson: 't-tasks', fa: 'نام، توضیح، نوع، مرحله و وضعیت پروژه را اینجا تغییر دهید.', en: 'Change the project name, description, type, stage and status here.' },
+}
+
+interface NextStep { tab: WorkspaceTab; fa: string; en: string }
+function computeNextStep(p: Project, qaDone: number): NextStep {
+  const answers = p.discovery?.answers?.length || 0
+  const files = (p.files?.files || []).filter(f => f.kind === 'file')
+  const filesUpdated = p.files?.updatedAt || ''
+  if (p.stage === 'published') return { tab: 'tasks', fa: 'پروژه منتشر شده است. برای قابلیت بعدی یک کار جدید بنویسید یا پروژه دوم را شروع کنید.', en: 'This project is published. Add a task for the next feature or start a second project.' }
+  if (answers < 3) return { tab: 'discovery', fa: 'در نیازسنجی حداقل ۳ سؤال را جواب بدهید.', en: 'Answer at least 3 questions in Discovery.' }
+  if (!p.discovery?.confirmed) return { tab: 'discovery', fa: 'نیازمندی‌ها را تأیید کنید تا به مرحله برنامه‌ریزی بروید.', en: 'Confirm the requirements to move to Planning.' }
+  if (!(p.ai?.messages?.length)) return { tab: 'ai', fa: 'از دستیار AI یک پرامپت بسازید و پاسخ را ذخیره کنید (مثلاً ساختار صفحات).', en: 'Build a prompt in the AI assistant and save the answer (e.g. page structure).' }
+  if (files.length === 0) return { tab: 'files', fa: 'فایل index.html را بسازید و کد دریافتی از AI را در آن بگذارید.', en: 'Create index.html and put the code from the AI into it.' }
+  if (!(p.versions?.snapshots?.length)) return { tab: 'versions', fa: 'یک نسخه سالم از وضعیت فعلی بگیرید.', en: 'Take a known-good snapshot of the current state.' }
+  if (!p.testReport || p.testReport.ranAt < filesUpdated) return { tab: 'versions', fa: 'تست‌ها را اجرا کنید (فایل‌ها از آخرین تست تغییر کرده‌اند).', en: 'Run the tests (files changed since the last test).' }
+  if (qaDone < 3) return { tab: 'preview', fa: 'سایت را در پیش‌نمایش ببینید و چک‌لیست کیفیت را کامل کنید.', en: 'View the site in Preview and complete the QA checklist.' }
+  return { tab: 'publish', fa: 'همه چیز آماده است: ZIP بگیرید و سایت را آنلاین کنید.', en: 'Everything is ready: export the ZIP and put the site online.' }
+}
+
 export default function App() {
   const [language, setLanguage] = useState<Language>(
     () => (localStorage.getItem('rahsaz.language') as Language) || 'fa'
@@ -199,6 +229,7 @@ export default function App() {
   const [qaChecks, setQaChecks] = useState<Record<string, boolean>>({})
   const [snapLabel, setSnapLabel] = useState('')
   const [snapNote, setSnapNote] = useState('')
+  const [learnLesson, setLearnLesson] = useState<string | undefined>(undefined)
 
   const t = useMemo(() => getTranslations(language), [language])
   const isFa = language === 'fa'
@@ -746,10 +777,63 @@ Created with Rahsaz.
     } else setStorageError(result.error)
   }, [activeProject, projects, t])
 
+  const handleControlDocs = useCallback(() => {
+    if (!activeProject) return
+    const docs = buildControlDocs(activeProject, k => (t[k as keyof TranslationKeys] as string) || k, isFa)
+    const now = new Date().toISOString()
+    let files = [...getFiles()]
+    for (const d of docs) {
+      const existing = files.find(f => f.path === d.path)
+      if (existing) {
+        // never overwrite hand-edited spec/decisions; status is regenerated
+        if (d.path === 'docs/status.txt') files = files.map(f => f.id === existing.id ? { ...f, content: d.content, updatedAt: now } : f)
+      } else {
+        files.push({ id: crypto.randomUUID(), path: d.path, kind: 'file', content: d.content, updatedAt: now })
+      }
+    }
+    persistFiles(files.sort((a, b) => a.path.localeCompare(b.path)))
+    setSaveMessage(isFa ? 'دفتر کنترل پروژه ساخته شد' : 'Control log created')
+    setTimeout(() => setSaveMessage(''), 2500)
+  }, [activeProject, getFiles, persistFiles, t, isFa])
+
+  const openTab = useCallback((tab: WorkspaceTab) => {
+    const target = activeProject || projects[0]
+    if (!target) { setActivePage('projects'); setShowCreate(true); return }
+    if (!activeProject) openProject(target)
+    setWorkspaceTab(tab)
+    window.scrollTo({ top: 0 })
+  }, [activeProject, projects, openProject])
+
+  const handleAcademyAction = useCallback((id: ActionId) => {
+    if (id === 'newProject') {
+      setActiveProjectId(null); setActivePage('projects'); setShowCreate(true); return
+    }
+    if (id === 'demo') {
+      const demo = buildDemo(language)
+      const existing = projects.find(p => p.name === demo.name)
+      if (existing) { openProject(existing); return }
+      const created = storageCreate({ name: demo.name, type: 'portfolio', description: demo.description, language }, projects)
+      if (!created.ok) { setStorageError(created.error); return }
+      const id0 = created.data[0].id
+      const now = new Date().toISOString()
+      const upd = storageUpdate(id0, {
+        discovery: { answers: demo.answers, notes: demo.notes, confirmed: false, updatedAt: now },
+        files: { files: demo.files, updatedAt: now },
+        tasks: demo.tasks,
+      }, created.data)
+      if (!upd.ok) { setStorageError(upd.error); return }
+      setProjects(upd.data)
+      const proj = upd.data.find(p => p.id === id0)
+      if (proj) openProject(proj)
+      return
+    }
+    if (id.startsWith('goto:')) openTab(id.slice(5) as WorkspaceTab)
+  }, [language, projects, openProject, openTab])
+
   const nav = [
     { id: 'overview' as const, label: t.overview, icon: Compass },
     { id: 'projects' as const, label: t.projects, icon: FolderKanban },
-    { id: 'guide' as const, label: t.guide, icon: BookOpen },
+    { id: 'guide' as const, label: t.guide, icon: GraduationCap },
     { id: 'settings' as const, label: t.settings, icon: Settings },
   ]
 
@@ -799,13 +883,14 @@ Created with Rahsaz.
               { id: 'publish' as const, label: t.projectPublish, icon: Upload },
               { id: 'tasks' as const, label: t.projectTasks, icon: ListTodo },
               { id: 'settings' as const, label: t.projectSettings, icon: Settings },
+              { id: 'learn' as const, label: isFa ? 'آموزش' : 'Academy', icon: GraduationCap },
             ].map(item => {
               const Icon = item.icon
               return (
                 <button
                   key={item.id}
                   className={`nav-item ${workspaceTab === item.id ? 'active' : ''}`}
-                  onClick={() => setWorkspaceTab(item.id)}
+                  onClick={() => { if (item.id === 'learn') setLearnLesson(undefined); setWorkspaceTab(item.id) }}
                 >
                   <Icon size={18} /><span>{item.label}</span>
                 </button>
@@ -837,6 +922,7 @@ Created with Rahsaz.
                   : workspaceTab === 'versions' ? t.projectVersions
                   : workspaceTab === 'publish' ? t.projectPublish
                   : workspaceTab === 'tasks' ? t.projectTasks
+                  : workspaceTab === 'learn' ? (isFa ? 'آموزش' : 'Academy')
                   : t.projectSettings}
               </span>
             </div>
@@ -859,6 +945,22 @@ Created with Rahsaz.
           )}
 
           <div className="content">
+            {workspaceTab !== 'overview' && workspaceTab !== 'learn' && TAB_HELP[workspaceTab] && (
+              <details className="tab-help" open={false}>
+                <summary><HelpCircle size={16} />{isFa ? 'این بخش چیست و چطور کار می‌کند؟' : 'What is this section and how does it work?'}</summary>
+                <div className="tab-help-body">
+                  <p style={{ margin: '0 0 10px' }}>{isFa ? TAB_HELP[workspaceTab].fa : TAB_HELP[workspaceTab].en}</p>
+                  <button type="button" className="text-button" onClick={() => { setLearnLesson(TAB_HELP[workspaceTab].lesson); setWorkspaceTab('learn') }}>
+                    <GraduationCap size={15} />{isFa ? 'آموزش کامل این بخش' : 'Full lesson on this section'}
+                  </button>
+                </div>
+              </details>
+            )}
+
+            {workspaceTab === 'learn' && (
+              <LearnView lang={language} initialLesson={learnLesson} onAction={handleAcademyAction} />
+            )}
+
             {/* OVERVIEW */}
             {workspaceTab === 'overview' && (
               <section className="page-section">
@@ -912,6 +1014,26 @@ Created with Rahsaz.
                     })}
                   </div>
                 </div>
+
+                {(() => {
+                  const ns = computeNextStep(activeProject, QA_KEYS.filter(k => qaChecks[k]).length)
+                  return (
+                    <div className="next-step">
+                      <div>
+                        <small>{isFa ? 'قدم بعدی پیشنهادی' : 'SUGGESTED NEXT STEP'}</small>
+                        <strong>{isFa ? ns.fa : ns.en}</strong>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button type="button" className="primary-button" onClick={() => setWorkspaceTab(ns.tab)}>
+                          {isFa ? 'برو' : 'Go'}<ArrowLeft size={15} style={{ transform: isFa ? undefined : 'scaleX(-1)' }} />
+                        </button>
+                        <button type="button" className="secondary-button" onClick={() => { setLearnLesson(undefined); setWorkspaceTab('learn') }}>
+                          <GraduationCap size={15} />{isFa ? 'آموزش' : 'Academy'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {answeredCount > 0 && (
                   <div className="section-block" style={{ marginTop: 28 }}>
@@ -1198,6 +1320,9 @@ Created with Rahsaz.
                   </button>
                   <button type="button" className="secondary-button" onClick={handleSeedStarter} title={t.seedStarterDesc}>
                     {t.seedStarter}
+                  </button>
+                  <button type="button" className="secondary-button" onClick={handleControlDocs} title={isFa ? 'ساخت docs/spec.txt، decisions.txt و status.txt از اطلاعات پروژه' : 'Create docs/spec.txt, decisions.txt and status.txt from project data'}>
+                    <FileText size={16} />{isFa ? 'دفتر کنترل پروژه' : 'Project control log'}
                   </button>
                 </div>
                 {fileError && <div className="form-error" style={{ marginBottom: 12 }}>{fileError}</div>}
@@ -1757,11 +1882,21 @@ Created with Rahsaz.
                   <button className="text-button" onClick={() => setActivePage('projects')}>{isFa ? 'مشاهده همه' : 'View all'} <ArrowUpLeft size={15} /></button>
                 </div>
                 {projects.length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-icon"><FolderKanban size={25} /></div>
-                    <strong>{t.noProjects}</strong>
-                    <button className="secondary-button" onClick={() => setShowCreate(true)}>{t.createFirst}</button>
-                  </div>
+                  <>
+                    <div className="empty-state">
+                      <div className="empty-icon"><FolderKanban size={25} /></div>
+                      <strong>{t.noProjects}</strong>
+                      <button className="secondary-button" onClick={() => setShowCreate(true)}>{t.createFirst}</button>
+                    </div>
+                    <div className="onboard">
+                      <h3><GraduationCap size={18} style={{ display: 'inline', verticalAlign: 'middle', marginInlineEnd: 6 }} />{isFa ? 'اولین بار است؟ از اینجا شروع کنید' : 'First time here? Start here'}</h3>
+                      <p>{isFa ? 'آکادمی راه‌ساز همه چیز را از صفر توضیح می‌دهد. یا یک پروژه نمونه آماده (سایت رزومه) بسازید و ابزارها را روی آن امتحان کنید.' : 'The Rahsaz Academy explains everything from zero. Or create a ready sample project (résumé site) and try the tools on it.'}</p>
+                      <div className="onboard-actions">
+                        <button className="primary-button" onClick={() => { setLearnLesson('what'); setActivePage('guide') }}>{isFa ? 'شروع آموزش' : 'Start the Academy'}</button>
+                        <button className="secondary-button" onClick={() => handleAcademyAction('demo')}>{isFa ? 'ساخت پروژه نمونه' : 'Create sample project'}</button>
+                      </div>
+                    </div>
+                  </>
                 ) : (
                   <div className="project-grid">
                     {projects.slice(0, 4).map(p => (
@@ -1796,20 +1931,7 @@ Created with Rahsaz.
           )}
 
           {activePage === 'guide' && (
-            <section className="page-section">
-              <div className="eyebrow">{isFa ? 'شروع سریع' : 'QUICK START'}</div>
-              <h1>{t.guide}</h1>
-              <p>{t.modeText}</p>
-              <div className="guide-list">
-                {[t.step1, t.step2, t.step3, t.step4].map((s, i) => (
-                  <div className="guide-row" key={s}>
-                    <span>0{i + 1}</span>
-                    <strong>{s}</strong>
-                    <small>{isFa ? 'در فازهای بعدی فعال می‌شود' : 'Will be enabled in upcoming phases'}</small>
-                  </div>
-                ))}
-              </div>
-            </section>
+            <LearnView lang={language} initialLesson={learnLesson} onAction={handleAcademyAction} />
           )}
 
           {activePage === 'settings' && (
