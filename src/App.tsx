@@ -3,7 +3,7 @@ import {
   Compass, FolderKanban, BookOpen, Settings, Plus, Sun, Moon,
   Languages, Sparkles, ArrowUpLeft, Trash2, X, Layers3,
   WandSparkles, Code2, Rocket, PanelLeftClose, AlertTriangle,
-  ArrowRight, CheckCircle2, Circle, ListTodo, Info, ChevronLeft
+  CheckCircle2, Circle, ListTodo, Info, ChevronLeft
 } from 'lucide-react'
 import type { Language, Project, ProjectType, ProjectStage, ProjectStatus, Theme, Task } from './types'
 import { getTranslations, type TranslationKeys } from './data/translations'
