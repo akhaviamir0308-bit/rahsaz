@@ -4,11 +4,13 @@ import {
   Languages, Sparkles, ArrowUpLeft, Trash2, X, Layers3,
   WandSparkles, Code2, Rocket, PanelLeftClose, AlertTriangle,
   CheckCircle2, Circle, ListTodo, Info, ChevronLeft, ClipboardList,
-  Bot, Copy, Check, MessageSquare, FileCode2, FolderPlus, FilePlus2, Eye, Monitor, Smartphone, Tablet
+  Bot, Copy, Check, MessageSquare, FileCode2, FolderPlus, FilePlus2, Eye, Monitor, Smartphone, Tablet,
+  History, FlaskConical, RotateCcw
 } from 'lucide-react'
 import type {
   Language, Project, ProjectType, ProjectStage, ProjectStatus,
-  Theme, Task, DiscoveryData, DiscoveryAnswer, AiData, AiMessage, FilesData, ProjectFile, QaData
+  Theme, Task, DiscoveryData, DiscoveryAnswer, AiData, AiMessage, FilesData, ProjectFile, QaData,
+  TestReport, TestCheck, VersionsData, VersionSnapshot
 } from './types'
 import {
   getTranslations, type TranslationKeys, DISCOVERY_QUESTIONS, PROMPT_TEMPLATES
@@ -28,7 +30,7 @@ const stages: ProjectStage[] = [
 const statuses: ProjectStatus[] = ['active', 'archived', 'completed']
 
 type PageId = 'overview' | 'projects' | 'guide' | 'settings'
-type WorkspaceTab = 'overview' | 'discovery' | 'ai' | 'files' | 'preview' | 'tasks' | 'settings'
+type WorkspaceTab = 'overview' | 'discovery' | 'ai' | 'files' | 'preview' | 'versions' | 'tasks' | 'settings'
 
 /** Build a context block from project + discovery */
 function buildProjectContext(project: Project, t: TranslationKeys, isFa: boolean): string {
@@ -194,6 +196,8 @@ export default function App() {
   const [viewport, setViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop')
   const [previewKey, setPreviewKey] = useState(0)
   const [qaChecks, setQaChecks] = useState<Record<string, boolean>>({})
+  const [snapLabel, setSnapLabel] = useState('')
+  const [snapNote, setSnapNote] = useState('')
 
   const t = useMemo(() => getTranslations(language), [language])
   const isFa = language === 'fa'
@@ -252,6 +256,8 @@ export default function App() {
       for (const [k, v] of Object.entries(project.qa.checks)) qc[k] = Boolean(v)
     }
     setQaChecks(qc)
+    setSnapLabel('')
+    setSnapNote('')
   }, [])
 
   const closeProject = useCallback(() => {
@@ -553,6 +559,114 @@ export default function App() {
     else setStorageError(result.error)
   }, [activeProject, qaChecks, projects])
 
+
+  const runFileTests = useCallback((): TestReport => {
+    const files = getFiles().filter(f => f.kind === 'file')
+    const checks: TestCheck[] = []
+    const hasIndex = files.some(f => f.path === 'index.html' || f.path.endsWith('/index.html'))
+    checks.push({
+      id: 'hasIndex',
+      labelKey: 'tc_hasIndex',
+      ok: hasIndex,
+      detail: hasIndex ? 'tc_hasIndex_ok' : 'tc_hasIndex_fail',
+    })
+    const emptyFiles = files.filter(f => (f.content || '').trim() === '')
+    checks.push({
+      id: 'notEmpty',
+      labelKey: 'tc_notEmpty',
+      ok: emptyFiles.length === 0,
+      detail: emptyFiles.length === 0 ? 'tc_notEmpty_ok' : 'tc_notEmpty_fail',
+    })
+    const hasCss = files.some(f => f.path.endsWith('.css'))
+    checks.push({
+      id: 'hasCss',
+      labelKey: 'tc_hasCss',
+      ok: hasCss,
+      detail: hasCss ? 'tc_hasCss_ok' : 'tc_hasCss_fail',
+    })
+    checks.push({
+      id: 'fileCount',
+      labelKey: 'tc_fileCount',
+      ok: files.length > 0,
+      detail: String(files.length),
+    })
+    return { checks, ranAt: new Date().toISOString() }
+  }, [getFiles])
+
+  const handleRunTests = useCallback(() => {
+    if (!activeProject) return
+    const report = runFileTests()
+    const result = storageUpdate(activeProject.id, { testReport: report }, projects)
+    if (result.ok) {
+      setProjects(result.data)
+      setSaveMessage(t.testsTitle)
+      setTimeout(() => setSaveMessage(''), 2000)
+    } else setStorageError(result.error)
+  }, [activeProject, runFileTests, projects, t])
+
+  const handleCreateSnapshot = useCallback(() => {
+    if (!activeProject) return
+    const label = snapLabel.trim() || new Date().toLocaleString()
+    const snap: VersionSnapshot = {
+      id: crypto.randomUUID(),
+      label,
+      note: snapNote.trim(),
+      createdAt: new Date().toISOString(),
+      files: getFiles().map(f => ({ ...f, content: f.content })),
+      stage: activeProject.stage,
+    }
+    const prev = activeProject.versions?.snapshots || []
+    const versions: VersionsData = {
+      snapshots: [snap, ...prev].slice(0, 20),
+      updatedAt: new Date().toISOString(),
+    }
+    const result = storageUpdate(activeProject.id, { versions }, projects)
+    if (result.ok) {
+      setProjects(result.data)
+      setSnapLabel('')
+      setSnapNote('')
+      setSaveMessage(t.snapshotSaved)
+      setTimeout(() => setSaveMessage(''), 2000)
+    } else setStorageError(result.error)
+  }, [activeProject, snapLabel, snapNote, getFiles, projects, t])
+
+  const handleRestoreSnapshot = useCallback((snap: VersionSnapshot) => {
+    if (!activeProject) return
+    if (!window.confirm(t.confirmRestore)) return
+    const filesData: FilesData = {
+      files: snap.files.map(f => ({ ...f })),
+      updatedAt: new Date().toISOString(),
+    }
+    const result = storageUpdate(
+      activeProject.id,
+      { files: filesData, stage: snap.stage },
+      projects
+    )
+    if (result.ok) {
+      setProjects(result.data)
+      setSelectedFileId(null)
+      setEditorContent('')
+      setEditorDirty(false)
+      setEditStage(snap.stage)
+      setPreviewKey(k => k + 1)
+      setSaveMessage(t.snapshotRestored)
+      setTimeout(() => setSaveMessage(''), 2500)
+    } else setStorageError(result.error)
+  }, [activeProject, projects, t])
+
+  const handleDeleteSnapshot = useCallback((id: string) => {
+    if (!activeProject) return
+    if (!window.confirm(t.confirmDeleteSnapshot)) return
+    const prev = activeProject.versions?.snapshots || []
+    const versions: VersionsData = {
+      snapshots: prev.filter(s => s.id !== id),
+      updatedAt: new Date().toISOString(),
+    }
+    const result = storageUpdate(activeProject.id, { versions }, projects)
+    if (result.ok) setProjects(result.data)
+    else setStorageError(result.error)
+  }, [activeProject, projects, t])
+
   const nav = [
     { id: 'overview' as const, label: t.overview, icon: Compass },
     { id: 'projects' as const, label: t.projects, icon: FolderKanban },
@@ -602,6 +716,7 @@ export default function App() {
               { id: 'ai' as const, label: t.projectAi, icon: Bot },
               { id: 'files' as const, label: t.projectFiles, icon: FileCode2 },
               { id: 'preview' as const, label: t.projectPreview, icon: Eye },
+              { id: 'versions' as const, label: t.projectVersions, icon: History },
               { id: 'tasks' as const, label: t.projectTasks, icon: ListTodo },
               { id: 'settings' as const, label: t.projectSettings, icon: Settings },
             ].map(item => {
@@ -639,6 +754,7 @@ export default function App() {
                   : workspaceTab === 'ai' ? t.projectAi
                   : workspaceTab === 'files' ? t.projectFiles
                   : workspaceTab === 'preview' ? t.projectPreview
+                  : workspaceTab === 'versions' ? t.projectVersions
                   : workspaceTab === 'tasks' ? t.projectTasks
                   : t.projectSettings}
               </span>
@@ -1143,7 +1259,111 @@ export default function App() {
               </section>
             )}
 
-            {/* TASKS */}
+            
+            {/* VERSIONS & TESTS */}
+            {workspaceTab === 'versions' && (
+              <section className="page-section">
+                <div className="page-title-row">
+                  <div>
+                    <div className="eyebrow">{t.projectVersions}</div>
+                    <h1>{t.versionsTitle}</h1>
+                    <p style={{ color: 'var(--muted)' }}>{t.versionsSubtitle}</p>
+                  </div>
+                  {saveMessage && <span className="save-toast">{saveMessage}</span>}
+                </div>
+
+                <div className="ai-block">
+                  <div className="page-title-row" style={{ marginBottom: 12 }}>
+                    <h3 className="ai-block-title" style={{ margin: 0 }}>{t.testsTitle}</h3>
+                    <button type="button" className="primary-button" onClick={handleRunTests}>
+                      <FlaskConical size={16} />
+                      {t.runTests}
+                    </button>
+                  </div>
+                  {!(activeProject.testReport && activeProject.testReport.checks && activeProject.testReport.checks.length) ? (
+                    <p className="ai-hint">{t.noTestsYet}</p>
+                  ) : (
+                    <div className="qa-list">
+                      {activeProject.testReport.checks.map(c => (
+                        <div key={c.id} className={'qa-item ' + (c.ok ? 'done' : '')}>
+                          <span>{c.ok ? 'OK' : '!'}</span>
+                          <span>{t[c.labelKey as keyof TranslationKeys] || c.labelKey}</span>
+                          <small>
+                            {c.id === 'fileCount'
+                              ? c.detail
+                              : (t[c.detail as keyof TranslationKeys] || c.detail)}
+                            {' · '}
+                            {c.ok ? t.testPass : t.testFail}
+                          </small>
+                        </div>
+                      ))}
+                      <small className="ai-hint">
+                        {new Date(activeProject.testReport.ranAt).toLocaleString(isFa ? 'fa-IR' : 'en-US')}
+                      </small>
+                    </div>
+                  )}
+                </div>
+
+                <div className="ai-block">
+                  <h3 className="ai-block-title">{t.createSnapshot}</h3>
+                  <div className="settings-form">
+                    <label>
+                      <span>{t.snapshotLabel}</span>
+                      <input
+                        value={snapLabel}
+                        onChange={e => setSnapLabel(e.target.value)}
+                        placeholder={t.snapshotLabelPh}
+                      />
+                    </label>
+                    <label>
+                      <span>{t.snapshotNote}</span>
+                      <input
+                        value={snapNote}
+                        onChange={e => setSnapNote(e.target.value)}
+                      />
+                    </label>
+                    <button type="button" className="primary-button" onClick={handleCreateSnapshot}>
+                      <History size={16} />
+                      {t.createSnapshot}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="ai-block">
+                  <h3 className="ai-block-title">{t.snapshotsList}</h3>
+                  {(activeProject.versions && activeProject.versions.snapshots && activeProject.versions.snapshots.length) ? (
+                    <div className="snap-list">
+                      {activeProject.versions.snapshots.map(snap => (
+                        <div key={snap.id} className="snap-card">
+                          <div>
+                            <strong>{snap.label}</strong>
+                            <p className="ai-hint" style={{ margin: '4px 0' }}>
+                              {new Date(snap.createdAt).toLocaleString(isFa ? 'fa-IR' : 'en-US')}
+                              {' · '}{t[snap.stage]}
+                              {' · '}{snap.files.length} files
+                            </p>
+                            {snap.note ? <p style={{ margin: 0, fontSize: 13 }}>{snap.note}</p> : null}
+                          </div>
+                          <div className="snap-actions">
+                            <button type="button" className="secondary-button" onClick={() => handleRestoreSnapshot(snap)}>
+                              <RotateCcw size={14} />
+                              {t.restoreSnapshot}
+                            </button>
+                            <button type="button" className="delete-button" onClick={() => handleDeleteSnapshot(snap.id)} title={t.deleteSnapshot}>
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="ai-hint">{t.noSnapshots}</p>
+                  )}
+                </div>
+              </section>
+            )}
+
+{/* TASKS */}
             {workspaceTab === 'tasks' && (
               <section className="page-section">
                 <div className="page-title-row">

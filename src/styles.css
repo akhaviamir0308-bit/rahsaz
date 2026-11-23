@@ -138,3 +138,8 @@
 .qa-item span{font-size:13px;font-weight:600}
 .qa-item small{font-size:11px;color:var(--muted)}
 .segmented button{display:inline-flex;align-items:center;gap:6px}
+
+/* Phase 6 — Versions */
+.snap-list{display:grid;gap:10px}
+.snap-card{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.snap-actions{display:flex;align-items:center;gap:8px}

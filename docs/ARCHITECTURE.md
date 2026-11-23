@@ -1,5 +1,4 @@
-# Rahsaz v0.7.0 — Phase 5
+# Rahsaz v0.8.0 — Phase 6
 
-Preview builds HTML from virtual files (`index.html` + inlined relative CSS/JS).
-Iframe sandbox: `allow-scripts` only (no same-origin network).
-QA checklist persisted on `Project.qa`.
+TestReport and VersionsData on Project.
+Snapshots clone virtual files for restore. Max 20 snapshots per project.

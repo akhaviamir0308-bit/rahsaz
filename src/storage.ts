@@ -4,10 +4,12 @@
 
 import type {
   Project, StorageResult, Task, DiscoveryData, AiData, AiMessage, FilesData, ProjectFile, QaData,
+  TestReport, VersionsData, VersionSnapshot, TestCheck,
 } from './types'
 
-const STORAGE_KEY = 'rahsaz.projects.v070'
+const STORAGE_KEY = 'rahsaz.projects.v080'
 const LEGACY_KEYS = [
+  'rahsaz.projects.v070',
   'rahsaz.projects.v060',
   'rahsaz.projects.v050',
   'rahsaz.projects.v040',
@@ -54,6 +56,8 @@ function migrateProject(p: any): Project {
     ai: normalizeAi(p.ai),
     files: normalizeFiles(p.files),
     qa: normalizeQa(p.qa),
+    testReport: normalizeTestReport(p.testReport),
+    versions: normalizeVersions(p.versions),
   }
 }
 
@@ -114,6 +118,41 @@ function normalizeFile(f: any): ProjectFile | null {
   }
 }
 
+
+function normalizeTestReport(tr: any): TestReport | undefined {
+  if (!tr || typeof tr !== 'object') return undefined
+  const checks: TestCheck[] = Array.isArray(tr.checks)
+    ? tr.checks.filter((c: any) => c && typeof c.id === 'string').map((c: any) => ({
+        id: c.id,
+        labelKey: typeof c.labelKey === 'string' ? c.labelKey : c.id,
+        ok: Boolean(c.ok),
+        detail: typeof c.detail === 'string' ? c.detail : '',
+      }))
+    : []
+  return {
+    checks,
+    ranAt: typeof tr.ranAt === 'string' ? tr.ranAt : new Date().toISOString(),
+  }
+}
+
+function normalizeVersions(v: any): VersionsData | undefined {
+  if (!v || typeof v !== 'object') return undefined
+  const snapshots: VersionSnapshot[] = Array.isArray(v.snapshots)
+    ? v.snapshots.filter((s: any) => s && typeof s.id === 'string').map((s: any) => ({
+        id: s.id,
+        label: typeof s.label === 'string' ? s.label : 'Snapshot',
+        note: typeof s.note === 'string' ? s.note : '',
+        createdAt: typeof s.createdAt === 'string' ? s.createdAt : new Date().toISOString(),
+        files: Array.isArray(s.files) ? s.files.map(normalizeFile).filter(Boolean) as ProjectFile[] : [],
+        stage: s.stage || 'discovery',
+      }))
+    : []
+  return {
+    snapshots,
+    updatedAt: typeof v.updatedAt === 'string' ? v.updatedAt : new Date().toISOString(),
+  }
+}
+
 function normalizeQa(q: any): QaData | undefined {
   if (!q || typeof q !== 'object') return undefined
   const checks: Record<string, boolean> = {}
@@ -158,6 +197,8 @@ function normalizeProject(p: any): Project | null {
     ai: normalizeAi(p.ai),
     files: normalizeFiles(p.files),
     qa: normalizeQa(p.qa),
+    testReport: normalizeTestReport(p.testReport),
+    versions: normalizeVersions(p.versions),
   }
 }
 
@@ -221,7 +262,7 @@ export function deleteProject(id: string, current: Project[]): StorageResult<Pro
 
 export function updateProject(
   id: string,
-  patch: Partial<Pick<Project, 'name' | 'description' | 'type' | 'stage' | 'status' | 'language' | 'tasks' | 'discovery' | 'ai' | 'files' | 'qa'>>,
+  patch: Partial<Pick<Project, 'name' | 'description' | 'type' | 'stage' | 'status' | 'language' | 'tasks' | 'discovery' | 'ai' | 'files' | 'qa' | 'testReport' | 'versions'>>,
   current: Project[]
 ): StorageResult<Project[]> {
   const index = current.findIndex((p) => p.id === id)
@@ -236,6 +277,8 @@ export function updateProject(
   if (patch.ai !== undefined) updated.ai = patch.ai
   if (patch.files !== undefined) updated.files = patch.files
   if (patch.qa !== undefined) updated.qa = patch.qa
+  if (patch.testReport !== undefined) updated.testReport = patch.testReport
+  if (patch.versions !== undefined) updated.versions = patch.versions
   const next = [...current]
   next[index] = updated
   const saveResult = saveProjects(next)

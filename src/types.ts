@@ -69,6 +69,35 @@ export interface QaData {
   updatedAt: string
 }
 
+/** Automated file checks result */
+export interface TestCheck {
+  id: string
+  labelKey: string
+  ok: boolean
+  detail: string
+}
+
+export interface TestReport {
+  checks: TestCheck[]
+  ranAt: string
+}
+
+/** Snapshot of project files for restore */
+export interface VersionSnapshot {
+  id: string
+  label: string
+  note: string
+  createdAt: string
+  /** Serialized files array at snapshot time */
+  files: ProjectFile[]
+  stage: ProjectStage
+}
+
+export interface VersionsData {
+  snapshots: VersionSnapshot[]
+  updatedAt: string
+}
+
 export interface Project {
   id: string
   name: string
@@ -84,6 +113,8 @@ export interface Project {
   ai?: AiData
   files?: FilesData
   qa?: QaData
+  testReport?: TestReport
+  versions?: VersionsData
 }
 
 export type StorageResult<T> =

@@ -1,11 +1,11 @@
-# Rahsaz — v0.7.0
+# Rahsaz — v0.8.0
 
-Phase 5: Preview & quality checklist.
+Phase 6: Testing & versioning.
 
 ## New
-- **Preview tab**: render `index.html` (+ linked local CSS/JS) in a sandboxed iframe
-- Viewport modes: desktop / tablet / mobile
-- **Quality checklist** stored per project
+- **Versions tab**: run automated file checks
+- **Snapshots**: save / restore / delete project file snapshots (up to 20)
+- Checks: index.html, empty files, CSS presence, file count
 
 ## Run
 ```bash
