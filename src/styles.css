@@ -92,3 +92,17 @@
 .ai-msg-role{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px}
 .ai-msg-body{margin:0;font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:var(--text);max-height:200px;overflow:auto}
 .ai-msg-time{display:block;margin-top:8px;font-size:11px;color:var(--muted)}
+
+/* Phase 3.1 — Clearer AI Assistant UX */
+.ai-steps-bar{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 20px}
+.ai-step-chip{padding:8px 12px;border-radius:999px;background:var(--panel3);border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--muted)}
+.ai-block{margin-bottom:28px;padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--panel2)}
+.ai-block-title{font-size:15px;margin:0 0 14px}
+.help-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media(max-width:700px){.help-grid{grid-template-columns:1fr}}
+.help-card{display:flex;flex-direction:column;gap:6px;text-align:start;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s}
+.help-card:hover{background:var(--panel3)}
+.help-card.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);background:var(--panel3)}
+.help-card strong{font-size:13px;line-height:1.4}
+.help-card span{font-size:12px;color:var(--muted);line-height:1.4}
+.ai-empty-hint,.ai-hint{margin:0 0 10px;font-size:13px;color:var(--muted)}

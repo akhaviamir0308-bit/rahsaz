@@ -633,7 +633,7 @@ export default function App() {
               </section>
             )}
 
-            {/* AI ASSISTANT */}
+            {/* AI ASSISTANT — redesigned clear flow */}
             {workspaceTab === 'ai' && (
               <section className="page-section">
                 <div className="page-title-row">
@@ -645,6 +645,12 @@ export default function App() {
                   {saveMessage && <span className="save-toast">{saveMessage}</span>}
                 </div>
 
+                <div className="ai-steps-bar">
+                  <div className="ai-step-chip">{t.aiStep1}</div>
+                  <div className="ai-step-chip">{t.aiStep2}</div>
+                  <div className="ai-step-chip">{t.aiStep3}</div>
+                </div>
+
                 {answeredCount === 0 && (
                   <div className="ai-warn">
                     <AlertTriangle size={16} />
@@ -652,106 +658,132 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="ai-how">
-                  <strong>{t.aiHowItWorks}</strong>
-                  <ol>
-                    <li>{t.aiStep1}</li>
-                    <li>{t.aiStep2}</li>
-                    <li>{t.aiStep3}</li>
-                  </ol>
+                {/* Step 1: pick help */}
+                <div className="ai-block">
+                  <h3 className="ai-block-title">{t.aiPickHelp}</h3>
+                  <div className="help-grid">
+                    {PROMPT_TEMPLATES.map(tpl => (
+                      <button
+                        key={tpl.id}
+                        type="button"
+                        className={`help-card ${selectedTemplate === tpl.id && !customPrompt ? 'selected' : ''}`}
+                        onClick={() => {
+                          setSelectedTemplate(tpl.id)
+                          setCustomPrompt('')
+                          setGeneratedPrompt(buildPromptFromTemplate(tpl.id, activeProject, t, isFa))
+                          setCopied(false)
+                        }}
+                      >
+                        <strong>{t[tpl.titleKey as keyof TranslationKeys]}</strong>
+                        <span>{t[tpl.descriptionKey as keyof TranslationKeys]}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <label className="ai-custom" style={{ marginTop: 14 }}>
+                    <span>{t.customPrompt}</span>
+                    <textarea
+                      value={customPrompt}
+                      onChange={e => {
+                        setCustomPrompt(e.target.value)
+                        setGeneratedPrompt('')
+                        setCopied(false)
+                      }}
+                      rows={2}
+                      placeholder={t.customPromptPlaceholder}
+                    />
+                  </label>
+                  {customPrompt.trim() && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ marginTop: 8 }}
+                      onClick={() => {
+                        const ctx = buildProjectContext(activeProject, t, isFa)
+                        const header = isFa
+                          ? 'تو یک مشاور حرفه‌ای طراحی و توسعه وب‌سایت هستی. بر اساس اطلاعات پروژه زیر پاسخ بده.\n\n'
+                          : 'You are a professional website design and development consultant. Answer based on the project information below.\n\n'
+                        setGeneratedPrompt(`${header}${ctx}\n\n---\n\n${customPrompt.trim()}`)
+                        setCopied(false)
+                      }}
+                    >
+                      {t.buildPrompt}
+                    </button>
+                  )}
                 </div>
 
-                <div className="ai-layout">
-                  <div className="ai-col">
-                    <h3>{t.aiTemplates}</h3>
-                    <div className="template-list">
-                      {PROMPT_TEMPLATES.map(tpl => (
-                        <button
-                          key={tpl.id}
-                          className={`template-card ${selectedTemplate === tpl.id && !customPrompt ? 'selected' : ''}`}
-                          onClick={() => { setSelectedTemplate(tpl.id); setCustomPrompt(''); setGeneratedPrompt('') }}
-                        >
-                          <strong>{t[tpl.titleKey as keyof TranslationKeys]}</strong>
-                          <small>{t[tpl.descriptionKey as keyof TranslationKeys]}</small>
-                        </button>
-                      ))}
-                    </div>
-
-                    <label className="ai-custom">
-                      <span>{t.customPrompt}</span>
-                      <textarea
-                        value={customPrompt}
-                        onChange={e => { setCustomPrompt(e.target.value); setGeneratedPrompt('') }}
-                        rows={3}
-                        placeholder={t.customPromptPlaceholder}
-                      />
-                    </label>
-
-                    <div className="ai-actions">
-                      <button className="secondary-button" onClick={handleBuildPrompt}>{t.buildPrompt}</button>
-                      <button className="primary-button" onClick={handleCopyPrompt}>
+                {/* Step 2: ready prompt */}
+                <div className="ai-block">
+                  <h3 className="ai-block-title">{t.aiReadyPrompt}</h3>
+                  {!generatedPrompt ? (
+                    <p className="ai-empty-hint">{t.aiEmptyPick}</p>
+                  ) : (
+                    <>
+                      <p className="ai-hint">{t.aiUseInTool}</p>
+                      <pre className="prompt-preview">{generatedPrompt}</pre>
+                      <button type="button" className="primary-button" style={{ marginTop: 12 }} onClick={handleCopyPrompt}>
                         {copied ? <Check size={16} /> : <Copy size={16} />}
                         {copied ? t.promptCopied : t.copyPrompt}
                       </button>
-                    </div>
+                    </>
+                  )}
+                </div>
 
-                    {generatedPrompt && (
-                      <pre className="prompt-preview">{generatedPrompt}</pre>
+                {/* Step 3: paste answer */}
+                <div className="ai-block">
+                  <h3 className="ai-block-title">{t.pasteResponse}</h3>
+                  <textarea
+                    className="paste-area"
+                    value={pasteText}
+                    onChange={e => setPasteText(e.target.value)}
+                    rows={6}
+                    placeholder={t.pastePlaceholder}
+                  />
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={handleSaveResponse}
+                    disabled={!pasteText.trim()}
+                    style={{ marginTop: 10 }}
+                  >
+                    {t.saveResponse}
+                  </button>
+                </div>
+
+                {/* Saved answers */}
+                <div className="ai-block">
+                  <div className="ai-history-header">
+                    <h3 className="ai-block-title" style={{ margin: 0 }}>{t.aiHistory}</h3>
+                    {aiMessages.length > 0 && (
+                      <button type="button" className="text-button" onClick={handleClearHistory}>{t.clearHistory}</button>
                     )}
                   </div>
-
-                  <div className="ai-col">
-                    <h3>{t.pasteResponse}</h3>
-                    <textarea
-                      className="paste-area"
-                      value={pasteText}
-                      onChange={e => setPasteText(e.target.value)}
-                      rows={8}
-                      placeholder={t.pastePlaceholder}
-                    />
-                    <button
-                      className="primary-button"
-                      onClick={handleSaveResponse}
-                      disabled={!pasteText.trim()}
-                      style={{ marginTop: 10 }}
-                    >
-                      {t.saveResponse}
-                    </button>
-
-                    <div className="ai-history-header">
-                      <h3>{t.aiHistory}</h3>
-                      {aiMessages.length > 0 && (
-                        <button className="text-button" onClick={handleClearHistory}>{t.clearHistory}</button>
-                      )}
+                  {aiMessages.length === 0 ? (
+                    <div className="empty-state" style={{ marginTop: 12 }}>
+                      <div className="empty-icon"><MessageSquare size={22} /></div>
+                      <strong>{t.aiNoHistory}</strong>
                     </div>
-
-                    {aiMessages.length === 0 ? (
-                      <div className="empty-state" style={{ marginTop: 12 }}>
-                        <div className="empty-icon"><MessageSquare size={22} /></div>
-                        <strong>{t.aiNoHistory}</strong>
-                      </div>
-                    ) : (
-                      <div className="ai-messages">
-                        {[...aiMessages].reverse().map(msg => (
-                          <div key={msg.id} className={`ai-msg ai-msg-${msg.role}`}>
-                            <div className="ai-msg-head">
-                              <span className="ai-msg-role">
-                                {msg.role === 'user' ? (isFa ? 'پرامپت' : 'Prompt') : (isFa ? 'پاسخ AI' : 'AI reply')}
-                                {msg.label ? ` · ${msg.label}` : ''}
-                              </span>
-                              <button className="delete-button" onClick={() => handleDeleteMessage(msg.id)} title={t.deleteMessage}>
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                            <pre className="ai-msg-body">{msg.content}</pre>
-                            <small className="ai-msg-time">
-                              {new Date(msg.createdAt).toLocaleString(isFa ? 'fa-IR' : 'en-US')}
-                            </small>
+                  ) : (
+                    <div className="ai-messages">
+                      {[...aiMessages].reverse().map(msg => (
+                        <div key={msg.id} className={`ai-msg ai-msg-${msg.role}`}>
+                          <div className="ai-msg-head">
+                            <span className="ai-msg-role">
+                              {msg.role === 'user' ? t.aiPromptLabel : t.aiResultLabel}
+                              {msg.label ? ` · ${msg.label}` : ''}
+                            </span>
+                            <button type="button" className="delete-button" onClick={() => handleDeleteMessage(msg.id)} title={t.deleteMessage}>
+                              <Trash2 size={14} />
+                            </button>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                          <pre className="ai-msg-body">{msg.content}</pre>
+                          <small className="ai-msg-time">
+                            {new Date(msg.createdAt).toLocaleString(isFa ? 'fa-IR' : 'en-US')}
+                          </small>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </section>
             )}
