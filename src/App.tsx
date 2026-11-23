@@ -402,7 +402,7 @@ export default function App() {
   const normalizePath = (raw: string) =>
     raw.trim().replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/')
 
-  const handleCreateFile = useCallback((kind: 'file' as const | 'folder') => {
+  const handleCreateFile = useCallback((kind: 'file' | 'folder') => {
     if (!activeProject) return
     setFileError('')
     const path = normalizePath(newPath)
