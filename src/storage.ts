@@ -1,5 +1,5 @@
 /**
- * Persistence layer for RahSaz (Phase 4)
+ * Persistence layer for RahSaz v0.10.2
  */
 
 import { uid } from './uid'
@@ -8,8 +8,9 @@ import type {
   TestReport, VersionsData, VersionSnapshot, TestCheck,
 } from './types'
 
-const STORAGE_KEY = 'rahsaz.projects.v080'
+const STORAGE_KEY = 'rahsaz.projects.v0102'
 const LEGACY_KEYS = [
+  'rahsaz.projects.v080',
   'rahsaz.projects.v070',
   'rahsaz.projects.v060',
   'rahsaz.projects.v050',

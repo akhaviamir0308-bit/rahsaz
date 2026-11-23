@@ -1,5 +1,5 @@
 /**
- * Core types for RahSaz v0.6.0 — Phase 4 (File & Code Management)
+ * Core types for RahSaz v0.10.2
  */
 
 export type Language = 'fa' | 'en'
