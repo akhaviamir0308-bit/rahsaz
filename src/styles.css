@@ -106,3 +106,22 @@
 .help-card strong{font-size:13px;line-height:1.4}
 .help-card span{font-size:12px;color:var(--muted);line-height:1.4}
 .ai-empty-hint,.ai-hint{margin:0 0 10px;font-size:13px;color:var(--muted)}
+
+/* Phase 4 — Files */
+.files-toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 12px;align-items:center}
+.files-path-input{flex:1;min-width:180px;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;padding:10px 12px;outline:none;font-size:13px}
+.files-path-input:focus{border-color:var(--accent)}
+.files-layout{display:grid;grid-template-columns:240px 1fr;gap:16px;min-height:420px}
+@media(max-width:800px){.files-layout{grid-template-columns:1fr}}
+.files-tree,.files-editor{border:1px solid var(--line);border-radius:14px;background:var(--panel2);padding:14px;min-height:360px}
+.files-tree h3{margin:0 0 12px;font-size:14px}
+.file-list{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.file-row{display:flex;align-items:center;gap:4px;border-radius:8px;padding:2px}
+.file-row.active{background:var(--panel3)}
+.file-open{flex:1;border:0;background:transparent;color:var(--text);text-align:start;padding:8px 10px;border-radius:8px;font-size:12px;cursor:pointer}
+.file-open:disabled{cursor:default;opacity:.85}
+.file-open:not(:disabled):hover{background:var(--panel3)}
+.editor-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.editor-path{font-size:12px;font-weight:600;color:var(--muted);word-break:break-all}
+.code-editor{width:100%;min-height:320px;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.5;resize:vertical;outline:none}
+.code-editor:focus{border-color:var(--accent)}

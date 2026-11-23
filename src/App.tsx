@@ -4,11 +4,11 @@ import {
   Languages, Sparkles, ArrowUpLeft, Trash2, X, Layers3,
   WandSparkles, Code2, Rocket, PanelLeftClose, AlertTriangle,
   CheckCircle2, Circle, ListTodo, Info, ChevronLeft, ClipboardList,
-  Bot, Copy, Check, MessageSquare
+  Bot, Copy, Check, MessageSquare, FileCode2, FolderPlus, FilePlus2
 } from 'lucide-react'
 import type {
   Language, Project, ProjectType, ProjectStage, ProjectStatus,
-  Theme, Task, DiscoveryData, DiscoveryAnswer, AiData, AiMessage
+  Theme, Task, DiscoveryData, DiscoveryAnswer, AiData, AiMessage, FilesData, ProjectFile
 } from './types'
 import {
   getTranslations, type TranslationKeys, DISCOVERY_QUESTIONS, PROMPT_TEMPLATES
@@ -28,7 +28,7 @@ const stages: ProjectStage[] = [
 const statuses: ProjectStatus[] = ['active', 'archived', 'completed']
 
 type PageId = 'overview' | 'projects' | 'guide' | 'settings'
-type WorkspaceTab = 'overview' | 'discovery' | 'ai' | 'tasks' | 'settings'
+type WorkspaceTab = 'overview' | 'discovery' | 'ai' | 'files' | 'tasks' | 'settings'
 
 /** Build a context block from project + discovery */
 function buildProjectContext(project: Project, t: TranslationKeys, isFa: boolean): string {
@@ -141,6 +141,13 @@ export default function App() {
   const [pasteText, setPasteText] = useState('')
   const [copied, setCopied] = useState(false)
 
+  // Files
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
+  const [editorContent, setEditorContent] = useState('')
+  const [editorDirty, setEditorDirty] = useState(false)
+  const [newPath, setNewPath] = useState('')
+  const [fileError, setFileError] = useState('')
+
   const t = useMemo(() => getTranslations(language), [language])
   const isFa = language === 'fa'
 
@@ -186,6 +193,11 @@ export default function App() {
     setGeneratedPrompt('')
     setPasteText('')
     setCopied(false)
+    setSelectedFileId(null)
+    setEditorContent('')
+    setEditorDirty(false)
+    setNewPath('')
+    setFileError('')
   }, [])
 
   const closeProject = useCallback(() => {
@@ -373,6 +385,109 @@ export default function App() {
     else setStorageError(result.error)
   }, [activeProject, projects])
 
+
+  // Files handlers
+  const getFiles = useCallback((): ProjectFile[] => {
+    return activeProject?.files?.files || []
+  }, [activeProject])
+
+  const persistFiles = useCallback((files: ProjectFile[]) => {
+    if (!activeProject) return
+    const data: FilesData = { files, updatedAt: new Date().toISOString() }
+    const result = storageUpdate(activeProject.id, { files: data }, projects)
+    if (result.ok) setProjects(result.data)
+    else setStorageError(result.error)
+  }, [activeProject, projects])
+
+  const normalizePath = (raw: string) =>
+    raw.trim().replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/')
+
+  const handleCreateFile = useCallback((kind: 'file' | 'folder') => {
+    if (!activeProject) return
+    setFileError('')
+    const path = normalizePath(newPath)
+    if (!path || path.includes('..')) {
+      setFileError(t.invalidPath)
+      return
+    }
+    const files = getFiles()
+    if (files.some(f => f.path === path)) {
+      setFileError(t.pathExists)
+      return
+    }
+    const now = new Date().toISOString()
+    const entry: ProjectFile = {
+      id: crypto.randomUUID(),
+      path,
+      kind,
+      content: kind === 'file' ? '' : undefined,
+      updatedAt: now,
+    }
+    const next = [...files, entry].sort((a, b) => a.path.localeCompare(b.path))
+    persistFiles(next)
+    setNewPath('')
+    if (kind === 'file') {
+      setSelectedFileId(entry.id)
+      setEditorContent('')
+      setEditorDirty(false)
+    }
+  }, [activeProject, newPath, getFiles, persistFiles, t])
+
+  const handleSelectFile = useCallback((file: ProjectFile) => {
+    if (file.kind !== 'file') return
+    setSelectedFileId(file.id)
+    setEditorContent(file.content || '')
+    setEditorDirty(false)
+    setFileError('')
+  }, [])
+
+  const handleSaveFile = useCallback(() => {
+    if (!activeProject || !selectedFileId) return
+    const files = getFiles().map(f =>
+      f.id === selectedFileId
+        ? { ...f, content: editorContent, updatedAt: new Date().toISOString() }
+        : f
+    )
+    persistFiles(files)
+    setEditorDirty(false)
+    setSaveMessage(t.fileSaved)
+    setTimeout(() => setSaveMessage(''), 2000)
+  }, [activeProject, selectedFileId, editorContent, getFiles, persistFiles, t])
+
+  const handleDeleteFile = useCallback((id: string) => {
+    if (!activeProject) return
+    if (!window.confirm(t.confirmDeleteFile)) return
+    const target = getFiles().find(f => f.id === id)
+    let files = getFiles().filter(f => f.id !== id)
+    // If folder, also remove nested paths
+    if (target?.kind === 'folder') {
+      const prefix = target.path.endsWith('/') ? target.path : target.path + '/'
+      files = files.filter(f => !f.path.startsWith(prefix))
+    }
+    persistFiles(files)
+    if (selectedFileId === id) {
+      setSelectedFileId(null)
+      setEditorContent('')
+      setEditorDirty(false)
+    }
+  }, [activeProject, getFiles, persistFiles, selectedFileId, t])
+
+  const handleSeedStarter = useCallback(() => {
+    if (!activeProject) return
+    const now = new Date().toISOString()
+    const existing = new Set(getFiles().map(f => f.path))
+    const starters: ProjectFile[] = [
+      { id: crypto.randomUUID(), path: 'index.html', kind: 'file', content: '<!DOCTYPE html>\\n<html lang=\"fa\" dir=\"rtl\">\\n<head>\\n  <meta charset=\"UTF-8\" />\\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\\n  <title>' + activeProject.name + '</title>\\n  <link rel=\"stylesheet\" href=\"styles.css\" />\\n</head>\\n<body>\\n  <main>\\n    <h1>' + activeProject.name + '</h1>\\n    <p>شروع پروژه</p>\\n  </main>\\n  <script src=\"main.js\"></script>\\n</body>\\n</html>\\n', updatedAt: now },
+      { id: crypto.randomUUID(), path: 'styles.css', kind: 'file', content: '* { box-sizing: border-box; }\\nbody { margin: 0; font-family: system-ui, sans-serif; }\\nmain { padding: 2rem; }\\n', updatedAt: now },
+      { id: crypto.randomUUID(), path: 'main.js', kind: 'file', content: 'console.log(\"Rahsaz starter\");\\n', updatedAt: now },
+      { id: crypto.randomUUID(), path: 'README.md', kind: 'file', content: '# ' + activeProject.name + '\\n\\nCreated with Rahsaz.\\n', updatedAt: now },
+    ].filter(f => !existing.has(f.path))
+    if (starters.length === 0) return
+    const next = [...getFiles(), ...starters].sort((a, b) => a.path.localeCompare(b.path))
+    persistFiles(next)
+  }, [activeProject, getFiles, persistFiles])
+
+
   const nav = [
     { id: 'overview' as const, label: t.overview, icon: Compass },
     { id: 'projects' as const, label: t.projects, icon: FolderKanban },
@@ -420,6 +535,7 @@ export default function App() {
               { id: 'overview' as const, label: t.projectOverview, icon: Info },
               { id: 'discovery' as const, label: t.projectDiscovery, icon: ClipboardList },
               { id: 'ai' as const, label: t.projectAi, icon: Bot },
+              { id: 'files' as const, label: t.projectFiles, icon: FileCode2 },
               { id: 'tasks' as const, label: t.projectTasks, icon: ListTodo },
               { id: 'settings' as const, label: t.projectSettings, icon: Settings },
             ].map(item => {
@@ -455,6 +571,7 @@ export default function App() {
                 {workspaceTab === 'overview' ? t.projectOverview
                   : workspaceTab === 'discovery' ? t.projectDiscovery
                   : workspaceTab === 'ai' ? t.projectAi
+                  : workspaceTab === 'files' ? t.projectFiles
                   : workspaceTab === 'tasks' ? t.projectTasks
                   : t.projectSettings}
               </span>
@@ -784,6 +901,98 @@ export default function App() {
                       ))}
                     </div>
                   )}
+                </div>
+              </section>
+            )}
+
+            
+            {/* FILES */}
+            {workspaceTab === 'files' && (
+              <section className="page-section">
+                <div className="page-title-row">
+                  <div>
+                    <div className="eyebrow">{t.projectFiles}</div>
+                    <h1>{t.filesTitle}</h1>
+                    <p style={{ color: 'var(--muted)' }}>{t.filesSubtitle}</p>
+                  </div>
+                  {saveMessage && <span className="save-toast">{saveMessage}</span>}
+                </div>
+
+                <div className="files-toolbar">
+                  <input
+                    type="text"
+                    value={newPath}
+                    onChange={e => setNewPath(e.target.value)}
+                    placeholder={t.fileNamePlaceholder}
+                    className="files-path-input"
+                  />
+                  <button type="button" className="secondary-button" onClick={() => handleCreateFile('file')}>
+                    <FilePlus2 size={16} />{t.createFile}
+                  </button>
+                  <button type="button" className="secondary-button" onClick={() => handleCreateFile('folder')}>
+                    <FolderPlus size={16} />{t.createFolder}
+                  </button>
+                  <button type="button" className="secondary-button" onClick={handleSeedStarter} title={t.seedStarterDesc}>
+                    {t.seedStarter}
+                  </button>
+                </div>
+                {fileError && <div className="form-error" style={{ marginBottom: 12 }}>{fileError}</div>}
+
+                <div className="files-layout">
+                  <div className="files-tree">
+                    <h3>{t.fileTree}</h3>
+                    {getFiles().length === 0 ? (
+                      <div className="empty-state" style={{ marginTop: 12 }}>
+                        <div className="empty-icon"><FileCode2 size={22} /></div>
+                        <strong>{t.noFiles}</strong>
+                      </div>
+                    ) : (
+                      <ul className="file-list">
+                        {getFiles().map(f => (
+                          <li key={f.id} className={`file-row ${selectedFileId === f.id ? 'active' : ''}`}>
+                            <button
+                              type="button"
+                              className="file-open"
+                              onClick={() => handleSelectFile(f)}
+                              disabled={f.kind === 'folder'}
+                            >
+                              {f.kind === 'folder' ? '📁' : '📄'} {f.path}
+                            </button>
+                            <button type="button" className="delete-button" onClick={() => handleDeleteFile(f.id)} title={t.deleteFile}>
+                              <Trash2 size={14} />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div className="files-editor">
+                    {!selectedFileId ? (
+                      <div className="empty-state">
+                        <div className="empty-icon"><FileCode2 size={22} /></div>
+                        <strong>{t.emptyEditor}</strong>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="editor-bar">
+                          <span className="editor-path">
+                            {getFiles().find(f => f.id === selectedFileId)?.path}
+                            {editorDirty ? ` · ${t.unsaved}` : ''}
+                          </span>
+                          <button type="button" className="primary-button" onClick={handleSaveFile} disabled={!editorDirty}>
+                            {t.saveFile}
+                          </button>
+                        </div>
+                        <textarea
+                          className="code-editor"
+                          value={editorContent}
+                          onChange={e => { setEditorContent(e.target.value); setEditorDirty(true) }}
+                          spellCheck={false}
+                        />
+                      </>
+                    )}
+                  </div>
                 </div>
               </section>
             )}

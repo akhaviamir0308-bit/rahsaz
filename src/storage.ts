@@ -1,11 +1,14 @@
 /**
- * Persistence layer for RahSaz (Phase 3)
+ * Persistence layer for RahSaz (Phase 4)
  */
 
-import type { Project, StorageResult, Task, DiscoveryData, AiData, AiMessage } from './types'
+import type {
+  Project, StorageResult, Task, DiscoveryData, AiData, AiMessage, FilesData, ProjectFile,
+} from './types'
 
-const STORAGE_KEY = 'rahsaz.projects.v050'
+const STORAGE_KEY = 'rahsaz.projects.v060'
 const LEGACY_KEYS = [
+  'rahsaz.projects.v050',
   'rahsaz.projects.v040',
   'rahsaz.projects.v030',
   'rahsaz.projects.v021',
@@ -16,7 +19,6 @@ function readRaw(): unknown {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) return JSON.parse(raw)
-
     for (const key of LEGACY_KEYS) {
       const legacy = localStorage.getItem(key)
       if (legacy) {
@@ -49,6 +51,7 @@ function migrateProject(p: any): Project {
     tasks: Array.isArray(p.tasks) ? p.tasks.map(normalizeTask).filter(Boolean) as Task[] : [],
     discovery: normalizeDiscovery(p.discovery),
     ai: normalizeAi(p.ai),
+    files: normalizeFiles(p.files),
   }
 }
 
@@ -66,8 +69,7 @@ function normalizeDiscovery(d: any): DiscoveryData | undefined {
   if (!d || typeof d !== 'object') return undefined
   return {
     answers: Array.isArray(d.answers)
-      ? d.answers
-          .filter((a: any) => a && typeof a.questionId === 'string' && typeof a.value === 'string')
+      ? d.answers.filter((a: any) => a && typeof a.questionId === 'string' && typeof a.value === 'string')
           .map((a: any) => ({ questionId: a.questionId, value: a.value }))
       : [],
     notes: typeof d.notes === 'string' ? d.notes : '',
@@ -98,11 +100,32 @@ function normalizeAi(a: any): AiData | undefined {
   }
 }
 
+function normalizeFile(f: any): ProjectFile | null {
+  if (!f || typeof f !== 'object' || typeof f.id !== 'string' || typeof f.path !== 'string') return null
+  if (f.kind !== 'file' && f.kind !== 'folder') return null
+  return {
+    id: f.id,
+    path: f.path.replace(/^\/+/, '').replace(/\\/g, '/'),
+    kind: f.kind,
+    content: f.kind === 'file' ? (typeof f.content === 'string' ? f.content : '') : undefined,
+    updatedAt: typeof f.updatedAt === 'string' ? f.updatedAt : new Date().toISOString(),
+  }
+}
+
+function normalizeFiles(fd: any): FilesData | undefined {
+  if (!fd || typeof fd !== 'object') return undefined
+  return {
+    files: Array.isArray(fd.files)
+      ? fd.files.map(normalizeFile).filter(Boolean) as ProjectFile[]
+      : [],
+    updatedAt: typeof fd.updatedAt === 'string' ? fd.updatedAt : new Date().toISOString(),
+  }
+}
+
 function normalizeProject(p: any): Project | null {
   if (!p || typeof p !== 'object') return null
   if (typeof p.id !== 'string' || !p.id) return null
   if (typeof p.name !== 'string') return null
-
   const now = new Date().toISOString()
   return {
     id: p.id,
@@ -117,6 +140,7 @@ function normalizeProject(p: any): Project | null {
     tasks: Array.isArray(p.tasks) ? p.tasks.map(normalizeTask).filter(Boolean) as Task[] : [],
     discovery: normalizeDiscovery(p.discovery),
     ai: normalizeAi(p.ai),
+    files: normalizeFiles(p.files),
   }
 }
 
@@ -124,8 +148,7 @@ export function loadProjects(): StorageResult<Project[]> {
   try {
     const raw = readRaw()
     if (!Array.isArray(raw)) return { ok: true, data: [] }
-    const projects = raw.map(normalizeProject).filter((p): p is Project => p !== null)
-    return { ok: true, data: projects }
+    return { ok: true, data: raw.map(normalizeProject).filter((p): p is Project => p !== null) }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Failed to load projects' }
   }
@@ -140,13 +163,16 @@ export function saveProjects(projects: Project[]): StorageResult<void> {
   }
 }
 
+function emptyFiles(): FilesData {
+  return { files: [], updatedAt: new Date().toISOString() }
+}
+
 export function createProject(
   input: { name: string; type: Project['type']; description?: string; language?: Project['language'] },
   current: Project[]
 ): StorageResult<Project[]> {
   const name = input.name.trim()
   if (!name) return { ok: false, error: 'EMPTY_NAME' }
-
   const now = new Date().toISOString()
   const project: Project = {
     id: crypto.randomUUID(),
@@ -161,8 +187,8 @@ export function createProject(
     tasks: [],
     discovery: { answers: [], notes: '', confirmed: false, updatedAt: now },
     ai: { messages: [], updatedAt: now },
+    files: emptyFiles(),
   }
-
   const next = [project, ...current]
   const saveResult = saveProjects(next)
   if (!saveResult.ok) return saveResult
@@ -178,22 +204,20 @@ export function deleteProject(id: string, current: Project[]): StorageResult<Pro
 
 export function updateProject(
   id: string,
-  patch: Partial<Pick<Project, 'name' | 'description' | 'type' | 'stage' | 'status' | 'language' | 'tasks' | 'discovery' | 'ai'>>,
+  patch: Partial<Pick<Project, 'name' | 'description' | 'type' | 'stage' | 'status' | 'language' | 'tasks' | 'discovery' | 'ai' | 'files'>>,
   current: Project[]
 ): StorageResult<Project[]> {
   const index = current.findIndex((p) => p.id === id)
   if (index === -1) return { ok: false, error: 'PROJECT_NOT_FOUND' }
-
   const now = new Date().toISOString()
   const updated: Project = { ...current[index], ...patch, updatedAt: now }
-
   if (patch.name !== undefined && !patch.name.trim()) return { ok: false, error: 'EMPTY_NAME' }
   if (patch.name) updated.name = patch.name.trim()
   if (patch.description !== undefined) updated.description = patch.description.trim()
   if (patch.tasks !== undefined) updated.tasks = patch.tasks
   if (patch.discovery !== undefined) updated.discovery = patch.discovery
   if (patch.ai !== undefined) updated.ai = patch.ai
-
+  if (patch.files !== undefined) updated.files = patch.files
   const next = [...current]
   next[index] = updated
   const saveResult = saveProjects(next)

@@ -1,3 +1,4 @@
-# Rahsaz — v0.5.1
+# Rahsaz — v0.6.0 (Phase 4)
 
-UX refinement of the Phase 3 AI layer. No new backend. Prompts remain provider-neutral and local-only.
+Virtual file tree per project (`FilesData` / `ProjectFile`) stored in localStorage.
+Editor is a controlled textarea. No sandboxed runtime in this phase.

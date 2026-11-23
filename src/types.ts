@@ -1,5 +1,5 @@
 /**
- * Core types for RahSaz v0.5.0 — Phase 3 (AI Assistant Layer)
+ * Core types for RahSaz v0.6.0 — Phase 4 (File & Code Management)
  */
 
 export type Language = 'fa' | 'en'
@@ -34,19 +34,33 @@ export interface DiscoveryData {
   updatedAt: string
 }
 
-/** One message in the AI conversation log */
 export interface AiMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
-  /** Optional label e.g. "Page structure", "Copy prompt" */
   label?: string
   createdAt: string
 }
 
-/** AI workspace data stored on the project */
 export interface AiData {
   messages: AiMessage[]
+  updatedAt: string
+}
+
+/** Virtual file or folder in the project workspace */
+export interface ProjectFile {
+  id: string
+  /** Path relative to project root, e.g. "src/App.tsx" or "index.html" */
+  path: string
+  /** "file" or "folder" */
+  kind: 'file' | 'folder'
+  /** Text content (only for files) */
+  content?: string
+  updatedAt: string
+}
+
+export interface FilesData {
+  files: ProjectFile[]
   updatedAt: string
 }
 
@@ -63,17 +77,9 @@ export interface Project {
   tasks?: Task[]
   discovery?: DiscoveryData
   ai?: AiData
+  files?: FilesData
 }
 
 export type StorageResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string }
-
-/** Built-in prompt template */
-export interface PromptTemplate {
-  id: string
-  titleKey: string
-  descriptionKey: string
-  /** Stage this template is most useful for */
-  stages: ProjectStage[]
-}

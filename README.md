@@ -1,18 +1,17 @@
-# Rahsaz — v0.5.1
+# Rahsaz — v0.6.0
 
-Clearer AI Assistant experience on top of v0.5.0.
+Phase 4: File & code management inside each project.
 
-## What changed in 0.5.1
-- **Redesigned AI Assistant** with a visible 3-step path
-- **Goal-oriented help cards** instead of abstract templates
-- **Prompt builds as soon as you pick a card**
-- **Saved answers** labeled as Request / Result
-- Same local, no-API-key workflow
+## What is new
+- **Files tab** in the project workspace
+- Create files and folders (virtual tree in the browser)
+- Simple code editor with save
+- Delete file / folder
+- **Starter structure** button (`index.html`, `styles.css`, `main.js`, `README.md`)
+- Data migrates from v0.5.x automatically
 
-## AI flow
-1. Choose the help you need  
-2. Copy the ready prompt into any AI tool  
-3. Paste the answer back and save it to the project  
+## Notes
+Files are stored in localStorage with the project. This is not a real disk or Git repo yet — it is a foundation for later export and preview.
 
 ## Run
 ```bash
