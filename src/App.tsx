@@ -304,7 +304,7 @@ export default function App() {
       setSaveMessage(t.changesSaved)
       setTimeout(() => setSaveMessage(''), 2500)
     } else {
-      if (result.error === 'EMPTY_NAME') setFormError(t.emptyName)
+      if (result.error === 'EMPTY_NAME') { setSaveMessage(t.emptyName); setTimeout(() => setSaveMessage(''), 2500) }
       else setStorageError(result.error)
     }
   }, [activeProject, editName, editDesc, editType, editStage, editStatus, projects, t])
@@ -496,11 +496,12 @@ export default function App() {
 
   const handleSelectFile = useCallback((file: ProjectFile) => {
     if (file.kind !== 'file') return
+    if (editorDirty && file.id !== selectedFileId && !window.confirm(t.confirmDiscardEdits)) return
     setSelectedFileId(file.id)
     setEditorContent(file.content || '')
     setEditorDirty(false)
     setFileError('')
-  }, [])
+  }, [editorDirty, selectedFileId, t])
 
   const handleSaveFile = useCallback(() => {
     if (!activeProject || !selectedFileId) return
@@ -537,11 +538,37 @@ export default function App() {
     if (!activeProject) return
     const now = new Date().toISOString()
     const existing = new Set(getFiles().map(f => f.path))
+    const safeName = activeProject.name.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] as string))
+    const lang = activeProject.language || language
+    const mk = (path: string, content: string): ProjectFile => ({ id: crypto.randomUUID(), path, kind: 'file', content, updatedAt: now })
     const starters: ProjectFile[] = [
-      { id: crypto.randomUUID(), path: 'index.html', kind: 'file' as const, content: '<!DOCTYPE html>\\n<html lang=\"fa\" dir=\"rtl\">\\n<head>\\n  <meta charset=\"UTF-8\" />\\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\\n  <title>' + activeProject.name + '</title>\\n  <link rel=\"stylesheet\" href=\"styles.css\" />\\n</head>\\n<body>\\n  <main>\\n    <h1>' + activeProject.name + '</h1>\\n    <p>شروع پروژه</p>\\n  </main>\\n  <script src=\"main.js\"></script>\\n</body>\\n</html>\\n', updatedAt: now },
-      { id: crypto.randomUUID(), path: 'styles.css', kind: 'file' as const, content: '* { box-sizing: border-box; }\\nbody { margin: 0; font-family: system-ui, sans-serif; }\\nmain { padding: 2rem; }\\n', updatedAt: now },
-      { id: crypto.randomUUID(), path: 'main.js', kind: 'file' as const, content: 'console.log(\"Rahsaz starter\");\\n', updatedAt: now },
-      { id: crypto.randomUUID(), path: 'README.md', kind: 'file' as const, content: '# ' + activeProject.name + '\\n\\nCreated with Rahsaz.\\n', updatedAt: now },
+      mk('index.html', `<!DOCTYPE html>
+<html lang="${lang}" dir="${lang === 'fa' ? 'rtl' : 'ltr'}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${safeName}</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main>
+    <h1>${safeName}</h1>
+    <p>${lang === 'fa' ? 'شروع پروژه' : 'Project starter'}</p>
+  </main>
+  <script src="main.js"></script>
+</body>
+</html>
+`),
+      mk('styles.css', `* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; }
+main { padding: 2rem; }
+`),
+      mk('main.js', `console.log("Rahsaz starter");
+`),
+      mk('README.md', `# ${activeProject.name}
+
+Created with Rahsaz.
+`),
     ].filter(f => !existing.has(f.path))
     if (starters.length === 0) return
     const next = [...getFiles(), ...starters].sort((a, b) => a.path.localeCompare(b.path))
@@ -585,6 +612,20 @@ export default function App() {
       ok: hasCss,
       detail: hasCss ? 'tc_hasCss_ok' : 'tc_hasCss_fail',
     })
+    const indexFile = files.find(f => f.path === 'index.html') || files.find(f => f.path.endsWith('.html'))
+    if (indexFile) {
+      const known = new Set(files.map(f => f.path))
+      const refs = [...(indexFile.content || '').matchAll(/(?:href|src)=["']([^"'#?]+)["']/gi)]
+        .map(m => m[1].replace(/^\.\//, ''))
+        .filter(r => !/^(https?:)?\/\/|^data:|^mailto:|^tel:/i.test(r))
+      const missing = refs.filter(r => !known.has(r))
+      checks.push({
+        id: 'brokenRefs',
+        labelKey: 'tc_brokenRefs',
+        ok: missing.length === 0,
+        detail: missing.length === 0 ? 'tc_brokenRefs_ok' : missing.slice(0, 5).join(', '),
+      })
+    }
     checks.push({
       id: 'fileCount',
       labelKey: 'tc_fileCount',
@@ -1211,6 +1252,13 @@ export default function App() {
                           className="code-editor"
                           value={editorContent}
                           onChange={e => { setEditorContent(e.target.value); setEditorDirty(true) }}
+                          onKeyDown={e => {
+                            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+                              e.preventDefault()
+                              if (editorDirty) handleSaveFile()
+                            }
+                          }}
+                          dir="ltr"
                           spellCheck={false}
                         />
                       </>
@@ -1421,7 +1469,9 @@ export default function App() {
                   const hasIndex = files.some(f => f.path === 'index.html' || f.path.endsWith('/index.html'))
                   const discoveryOk = Boolean(activeProject.discovery?.confirmed)
                   const tests = activeProject.testReport?.checks || []
-                  const criticalOk = tests.length > 0 && tests.filter(c => c.id === 'hasIndex' || c.id === 'notEmpty').every(c => c.ok)
+                  const filesUpdated = activeProject.files?.updatedAt || ''
+                  const reportFresh = Boolean(activeProject.testReport) && (activeProject.testReport!.ranAt >= filesUpdated)
+                  const criticalOk = reportFresh && tests.length > 0 && tests.filter(c => c.id === 'hasIndex' || c.id === 'notEmpty' || c.id === 'brokenRefs').every(c => c.ok)
                   const qaKeys = ['qa_responsive', 'qa_content', 'qa_links', 'qa_images', 'qa_lang']
                   const qaDone = qaKeys.filter(k => qaChecks[k]).length
                   const qaOk = qaDone >= Math.ceil(qaKeys.length / 2)

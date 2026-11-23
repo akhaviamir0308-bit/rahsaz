@@ -40,21 +40,26 @@ function concat(parts: Uint8Array[]): Uint8Array {
 
 export function buildZip(files: { path: string; content: string }[]): Blob {
   const enc = new TextEncoder()
+  // Bit 11: file names are UTF-8 (needed for Persian file names)
+  const UTF8_FLAG = 0x0800
+  const now = new Date()
+  const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1)
+  const dosDate = (Math.max(now.getFullYear() - 1980, 0) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()
   const localParts: Uint8Array[] = []
   const centralParts: Uint8Array[] = []
   let offset = 0
 
   for (const file of files) {
-    const name = enc.encode(file.path.replace(/^\/+/, ''))
+    const name = enc.encode(file.path.replace(/\\/g, '/').replace(/^\/+/, ''))
     const data = enc.encode(file.content)
     const crc = crc32(data)
     const local = concat([
       u32(0x04034b50),
       u16(20),
+      u16(UTF8_FLAG),
       u16(0),
-      u16(0),
-      u16(0),
-      u16(0),
+      u16(dosTime),
+      u16(dosDate),
       u32(crc),
       u32(data.length),
       u32(data.length),
@@ -69,10 +74,10 @@ export function buildZip(files: { path: string; content: string }[]): Blob {
       u32(0x02014b50),
       u16(20),
       u16(20),
+      u16(UTF8_FLAG),
       u16(0),
-      u16(0),
-      u16(0),
-      u16(0),
+      u16(dosTime),
+      u16(dosDate),
       u32(crc),
       u32(data.length),
       u32(data.length),
@@ -112,6 +117,8 @@ export function downloadBlob(filename: string, blob: Blob): void {
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  document.body.appendChild(a)
   a.click()
-  URL.revokeObjectURL(url)
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
