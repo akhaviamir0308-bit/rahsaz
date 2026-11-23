@@ -1,4 +1,4 @@
-# Rahsaz architecture — v0.2.0
+# Rahsaz architecture — v0.2.1 (Phase 0 complete)
 
 ## Product principles
 1. The user remains the website creator and decision-maker; Rahsaz guides and organizes the work.
@@ -9,13 +9,20 @@
 6. Website architecture must be selected per project; not every website is a single HTML file.
 
 ## Current application layers
-- Presentation: React components and responsive CSS.
-- Localization: translation dictionaries and document `lang`/`dir` attributes.
-- Preferences: language and theme in localStorage.
-- Project domain: typed Project model and project creation/deletion.
-- Persistence: localStorage adapter (temporary MVP implementation).
+- **Presentation**: React components and responsive CSS.
+- **Localization**: translation dictionaries and document `lang`/`dir` attributes.
+- **Preferences**: language and theme in localStorage.
+- **Project domain**: typed Project model (id, name, type, description, createdAt, updatedAt, stage, status).
+- **Persistence**: dedicated `storage.ts` module (localStorage backend, versioned key, migration from 0.2.0, Result-based API). Ready for IndexedDB swap.
 
-## Planned modules
+## Phase 0 changes
+- Expanded Project interface.
+- Extracted all read/write logic into `src/storage.ts`.
+- Added two-step delete confirmation.
+- Surface storage errors to the user.
+- Automatic one-time migration of old projects.
+
+## Planned modules (next)
 - Project discovery: structured questionnaire, goals, audience, content, constraints.
 - Architecture planner: recommends a stack based on website type and complexity.
 - Design workspace: pages, navigation, components, design tokens.
@@ -33,9 +40,12 @@ Current localStorage is intentionally temporary. Move project records and larger
 - Never ship a developer-owned API key in public client code.
 - GitHub Pages is static hosting; it does not provide a private server or shared database.
 
-## Initial implementation acceptance criteria
-- User can switch Persian/English; page direction changes with language.
-- User can switch light/dark appearance.
-- User can create and delete projects.
-- Project list persists after page refresh in the same browser profile.
-- Layout remains usable on desktop and mobile.
+## Acceptance criteria (Phase 0)
+- [x] User can switch Persian/English; page direction changes with language.
+- [x] User can switch light/dark appearance.
+- [x] User can create projects with the new data model.
+- [x] User can delete a project only after explicit confirmation.
+- [x] Project list persists after page refresh in the same browser profile.
+- [x] Old v0.2.0 projects are migrated automatically.
+- [x] Storage errors are reported instead of failing silently.
+- [x] Layout remains usable on desktop and mobile.

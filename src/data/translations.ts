@@ -35,6 +35,11 @@ const fa = {
   webapp: 'وب‌اپلیکیشن',
   created: 'پروژه ایجاد شد',
   discovery: 'نیازسنجی',
+  planning: 'برنامه‌ریزی',
+  design: 'طراحی',
+  development: 'توسعه',
+  testing: 'آزمایش',
+  published: 'منتشر شده',
   theme: 'پوسته',
   dark: 'تیره',
   light: 'روشن',
@@ -48,6 +53,17 @@ const fa = {
   modeText: 'در نسخه‌های بعدی می‌توانی بین راهنمای قدم‌به‌قدم و کنترل حرفه‌ای جابه‌جا شوی.',
   delete: 'حذف',
   emptyName: 'لطفاً نام پروژه را وارد کن.',
+  // Phase 0 additions
+  confirmDeleteTitle: 'حذف پروژه',
+  confirmDeleteMessage: 'این عمل قابل بازگشت نیست. تمام اطلاعات این پروژه از این مرورگر پاک می‌شود.',
+  confirmDeleteButton: 'بله، حذف شود',
+  deleteSuccess: 'پروژه حذف شد',
+  storageError: 'خطا در ذخیره‌سازی. لطفاً دوباره تلاش کن.',
+  statusActive: 'فعال',
+  statusArchived: 'بایگانی',
+  statusCompleted: 'تکمیل‌شده',
+  updatedAt: 'آخرین تغییر',
+  versionLabel: 'نسخه ۰.۲.۱',
 } as const
 
 const en = {
@@ -85,6 +101,11 @@ const en = {
   webapp: 'Web application',
   created: 'Project created',
   discovery: 'Discovery',
+  planning: 'Planning',
+  design: 'Design',
+  development: 'Development',
+  testing: 'Testing',
+  published: 'Published',
   theme: 'Theme',
   dark: 'Dark',
   light: 'Light',
@@ -98,8 +119,21 @@ const en = {
   modeText: 'Future versions will let you switch between step-by-step guidance and advanced controls.',
   delete: 'Delete',
   emptyName: 'Please enter a project name.',
+  // Phase 0 additions
+  confirmDeleteTitle: 'Delete project',
+  confirmDeleteMessage: 'This action cannot be undone. All data for this project will be removed from this browser.',
+  confirmDeleteButton: 'Yes, delete',
+  deleteSuccess: 'Project deleted',
+  storageError: 'Storage error. Please try again.',
+  statusActive: 'Active',
+  statusArchived: 'Archived',
+  statusCompleted: 'Completed',
+  updatedAt: 'Last updated',
+  versionLabel: 'Version 0.2.1',
 } as const
 
-export function getTranslations(language: Language) {
+export type TranslationKeys = typeof fa
+
+export function getTranslations(language: Language): TranslationKeys {
   return language === 'fa' ? fa : en
 }
