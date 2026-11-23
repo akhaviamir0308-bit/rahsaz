@@ -402,7 +402,7 @@ export default function App() {
   const normalizePath = (raw: string) =>
     raw.trim().replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/')
 
-  const handleCreateFile = useCallback((kind: 'file' | 'folder') => {
+  const handleCreateFile = useCallback((kind: 'file' as const | 'folder') => {
     if (!activeProject) return
     setFileError('')
     const path = normalizePath(newPath)
@@ -477,10 +477,10 @@ export default function App() {
     const now = new Date().toISOString()
     const existing = new Set(getFiles().map(f => f.path))
     const starters: ProjectFile[] = [
-      { id: crypto.randomUUID(), path: 'index.html', kind: 'file', content: '<!DOCTYPE html>\\n<html lang=\"fa\" dir=\"rtl\">\\n<head>\\n  <meta charset=\"UTF-8\" />\\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\\n  <title>' + activeProject.name + '</title>\\n  <link rel=\"stylesheet\" href=\"styles.css\" />\\n</head>\\n<body>\\n  <main>\\n    <h1>' + activeProject.name + '</h1>\\n    <p>شروع پروژه</p>\\n  </main>\\n  <script src=\"main.js\"></script>\\n</body>\\n</html>\\n', updatedAt: now },
-      { id: crypto.randomUUID(), path: 'styles.css', kind: 'file', content: '* { box-sizing: border-box; }\\nbody { margin: 0; font-family: system-ui, sans-serif; }\\nmain { padding: 2rem; }\\n', updatedAt: now },
-      { id: crypto.randomUUID(), path: 'main.js', kind: 'file', content: 'console.log(\"Rahsaz starter\");\\n', updatedAt: now },
-      { id: crypto.randomUUID(), path: 'README.md', kind: 'file', content: '# ' + activeProject.name + '\\n\\nCreated with Rahsaz.\\n', updatedAt: now },
+      { id: crypto.randomUUID(), path: 'index.html', kind: 'file' as const, content: '<!DOCTYPE html>\\n<html lang=\"fa\" dir=\"rtl\">\\n<head>\\n  <meta charset=\"UTF-8\" />\\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\\n  <title>' + activeProject.name + '</title>\\n  <link rel=\"stylesheet\" href=\"styles.css\" />\\n</head>\\n<body>\\n  <main>\\n    <h1>' + activeProject.name + '</h1>\\n    <p>شروع پروژه</p>\\n  </main>\\n  <script src=\"main.js\"></script>\\n</body>\\n</html>\\n', updatedAt: now },
+      { id: crypto.randomUUID(), path: 'styles.css', kind: 'file' as const, content: '* { box-sizing: border-box; }\\nbody { margin: 0; font-family: system-ui, sans-serif; }\\nmain { padding: 2rem; }\\n', updatedAt: now },
+      { id: crypto.randomUUID(), path: 'main.js', kind: 'file' as const, content: 'console.log(\"Rahsaz starter\");\\n', updatedAt: now },
+      { id: crypto.randomUUID(), path: 'README.md', kind: 'file' as const, content: '# ' + activeProject.name + '\\n\\nCreated with Rahsaz.\\n', updatedAt: now },
     ].filter(f => !existing.has(f.path))
     if (starters.length === 0) return
     const next = [...getFiles(), ...starters].sort((a, b) => a.path.localeCompare(b.path))
