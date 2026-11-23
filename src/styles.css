@@ -42,3 +42,22 @@
 .meta-row{display:flex;flex-wrap:wrap;align-items:center}
 .secondary-button{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-weight:600;font-size:13px;cursor:pointer}
 .secondary-button:hover{background:var(--panel3)}
+
+/* Phase 2 — Discovery */
+.discovery-progress-bar{position:relative;height:28px;background:var(--panel3);border-radius:8px;margin:20px 0 28px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.discovery-progress-fill{position:absolute;inset-inline-start:0;top:0;bottom:0;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:8px;transition:width .3s}
+.discovery-progress-bar span{position:relative;z-index:1;font-size:12px;font-weight:700;color:#fff;text-shadow:0 1px 2px #0006}
+.discovery-form{display:grid;gap:18px}
+.discovery-question{display:grid;gap:8px}
+.dq-header{display:flex;align-items:flex-start;gap:12px}
+.dq-num{width:28px;height:28px;border-radius:8px;background:var(--panel3);color:var(--accent);display:grid;place-items:center;font-size:12px;font-weight:800;flex-shrink:0}
+.dq-header strong{display:block;font-size:14px}
+.dq-header small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.discovery-question textarea{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;padding:12px 14px;outline:none;font-size:14px;resize:vertical;width:100%}
+.discovery-question textarea:focus{border-color:var(--accent)}
+.discovery-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
+.discovery-actions .primary-button:disabled{opacity:.45;cursor:not-allowed}
+.req-summary{display:grid;gap:12px}
+.req-item{padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}
+.req-item strong{display:block;font-size:13px;color:var(--accent);margin-bottom:4px}
+.req-item p{margin:0;font-size:14px;line-height:1.55;color:var(--text)}

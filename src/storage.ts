@@ -1,46 +1,26 @@
 /**
- * Persistence layer for RahSaz (Phase 1)
- *
- * Current implementation: localStorage with versioned key + simple migration.
- * Designed so we can later swap the backend to IndexedDB without changing callers.
- *
- * Principles:
- * - Never throw to the UI layer; always return StorageResult
- * - Keep data isolated per storage key version
- * - Support basic migration from older formats
+ * Persistence layer for RahSaz (Phase 2)
  */
 
-import type { Project, StorageResult, Task } from './types'
+import type { Project, StorageResult, Task, DiscoveryData } from './types'
 
-const STORAGE_KEY = 'rahsaz.projects.v030'
-const LEGACY_KEY_021 = 'rahsaz.projects.v021'
-const LEGACY_KEY_020 = 'rahsaz.projects.v020'
+const STORAGE_KEY = 'rahsaz.projects.v040'
+const LEGACY_KEYS = ['rahsaz.projects.v030', 'rahsaz.projects.v021', 'rahsaz.projects.v020']
 
-/** Read raw projects array from localStorage */
 function readRaw(): unknown {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) return JSON.parse(raw)
 
-    // Migration from v0.2.1
-    const legacy021 = localStorage.getItem(LEGACY_KEY_021)
-    if (legacy021) {
-      const parsed = JSON.parse(legacy021)
-      if (Array.isArray(parsed)) {
-        const migrated = parsed.map(migrateProject)
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated))
-        return migrated
-      }
-    }
-
-    // Migration from v0.2.0
-    const legacy020 = localStorage.getItem(LEGACY_KEY_020)
-    if (legacy020) {
-      const parsed = JSON.parse(legacy020)
-      if (Array.isArray(parsed)) {
-        const migrated = parsed.map(migrateProject)
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated))
-        return migrated
+    for (const key of LEGACY_KEYS) {
+      const legacy = localStorage.getItem(key)
+      if (legacy) {
+        const parsed = JSON.parse(legacy)
+        if (Array.isArray(parsed)) {
+          const migrated = parsed.map(migrateProject)
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated))
+          return migrated
+        }
       }
     }
     return []
@@ -49,7 +29,6 @@ function readRaw(): unknown {
   }
 }
 
-/** Migrate any older project shape to the current model */
 function migrateProject(p: any): Project {
   const now = new Date().toISOString()
   return {
@@ -63,6 +42,7 @@ function migrateProject(p: any): Project {
     status: p.status || 'active',
     language: p.language === 'en' || p.language === 'fa' ? p.language : undefined,
     tasks: Array.isArray(p.tasks) ? p.tasks.map(normalizeTask).filter(Boolean) as Task[] : [],
+    discovery: normalizeDiscovery(p.discovery),
   }
 }
 
@@ -76,7 +56,20 @@ function normalizeTask(t: any): Task | null {
   }
 }
 
-/** Validate and normalize a project object */
+function normalizeDiscovery(d: any): DiscoveryData | undefined {
+  if (!d || typeof d !== 'object') return undefined
+  return {
+    answers: Array.isArray(d.answers)
+      ? d.answers
+          .filter((a: any) => a && typeof a.questionId === 'string' && typeof a.value === 'string')
+          .map((a: any) => ({ questionId: a.questionId, value: a.value }))
+      : [],
+    notes: typeof d.notes === 'string' ? d.notes : '',
+    confirmed: Boolean(d.confirmed),
+    updatedAt: typeof d.updatedAt === 'string' ? d.updatedAt : new Date().toISOString(),
+  }
+}
+
 function normalizeProject(p: any): Project | null {
   if (!p || typeof p !== 'object') return null
   if (typeof p.id !== 'string' || !p.id) return null
@@ -94,55 +87,36 @@ function normalizeProject(p: any): Project | null {
     status: p.status || 'active',
     language: p.language === 'en' || p.language === 'fa' ? p.language : undefined,
     tasks: Array.isArray(p.tasks) ? p.tasks.map(normalizeTask).filter(Boolean) as Task[] : [],
+    discovery: normalizeDiscovery(p.discovery),
   }
 }
 
-/** Load all projects */
 export function loadProjects(): StorageResult<Project[]> {
   try {
     const raw = readRaw()
-    if (!Array.isArray(raw)) {
-      return { ok: true, data: [] }
-    }
-    const projects = raw
-      .map(normalizeProject)
-      .filter((p): p is Project => p !== null)
+    if (!Array.isArray(raw)) return { ok: true, data: [] }
+    const projects = raw.map(normalizeProject).filter((p): p is Project => p !== null)
     return { ok: true, data: projects }
   } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : 'Failed to load projects',
-    }
+    return { ok: false, error: err instanceof Error ? err.message : 'Failed to load projects' }
   }
 }
 
-/** Persist the full projects list */
 export function saveProjects(projects: Project[]): StorageResult<void> {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
     return { ok: true, data: undefined }
   } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : 'Failed to save projects',
-    }
+    return { ok: false, error: err instanceof Error ? err.message : 'Failed to save projects' }
   }
 }
 
-/** Create a new project and return the updated list */
 export function createProject(
-  input: {
-    name: string
-    type: Project['type']
-    description?: string
-    language?: Project['language']
-  },
+  input: { name: string; type: Project['type']; description?: string; language?: Project['language'] },
   current: Project[]
 ): StorageResult<Project[]> {
   const name = input.name.trim()
-  if (!name) {
-    return { ok: false, error: 'EMPTY_NAME' }
-  }
+  if (!name) return { ok: false, error: 'EMPTY_NAME' }
 
   const now = new Date().toISOString()
   const project: Project = {
@@ -156,6 +130,7 @@ export function createProject(
     status: 'active',
     language: input.language,
     tasks: [],
+    discovery: { answers: [], notes: '', confirmed: false, updatedAt: now },
   }
 
   const next = [project, ...current]
@@ -164,41 +139,29 @@ export function createProject(
   return { ok: true, data: next }
 }
 
-/** Delete a project by id */
-export function deleteProject(
-  id: string,
-  current: Project[]
-): StorageResult<Project[]> {
+export function deleteProject(id: string, current: Project[]): StorageResult<Project[]> {
   const next = current.filter((p) => p.id !== id)
   const saveResult = saveProjects(next)
   if (!saveResult.ok) return saveResult
   return { ok: true, data: next }
 }
 
-/** Update an existing project (partial) */
 export function updateProject(
   id: string,
-  patch: Partial<Pick<Project, 'name' | 'description' | 'type' | 'stage' | 'status' | 'language' | 'tasks'>>,
+  patch: Partial<Pick<Project, 'name' | 'description' | 'type' | 'stage' | 'status' | 'language' | 'tasks' | 'discovery'>>,
   current: Project[]
 ): StorageResult<Project[]> {
   const index = current.findIndex((p) => p.id === id)
-  if (index === -1) {
-    return { ok: false, error: 'PROJECT_NOT_FOUND' }
-  }
+  if (index === -1) return { ok: false, error: 'PROJECT_NOT_FOUND' }
 
   const now = new Date().toISOString()
-  const updated: Project = {
-    ...current[index],
-    ...patch,
-    updatedAt: now,
-  }
+  const updated: Project = { ...current[index], ...patch, updatedAt: now }
 
-  if (patch.name !== undefined && !patch.name.trim()) {
-    return { ok: false, error: 'EMPTY_NAME' }
-  }
+  if (patch.name !== undefined && !patch.name.trim()) return { ok: false, error: 'EMPTY_NAME' }
   if (patch.name) updated.name = patch.name.trim()
   if (patch.description !== undefined) updated.description = patch.description.trim()
   if (patch.tasks !== undefined) updated.tasks = patch.tasks
+  if (patch.discovery !== undefined) updated.discovery = patch.discovery
 
   const next = [...current]
   next[index] = updated

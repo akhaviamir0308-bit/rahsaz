@@ -1,11 +1,10 @@
 /**
- * Core types for RahSaz v0.3.0 — Phase 1 (Project Workspace)
+ * Core types for RahSaz v0.4.0 — Phase 2 (Smart Discovery)
  */
 
 export type Language = 'fa' | 'en'
 export type Theme = 'dark' | 'light'
 
-/** Supported website / project types */
 export type ProjectType =
   | 'portfolio'
   | 'business'
@@ -16,19 +15,16 @@ export type ProjectType =
   | 'community'
   | 'webapp'
 
-/** High-level development stage of a project */
 export type ProjectStage =
-  | 'discovery'   // نیازسنجی
-  | 'planning'    // برنامه‌ریزی و معماری
-  | 'design'      // طراحی
-  | 'development' // توسعه و کدنویسی
-  | 'testing'     // آزمایش
-  | 'published'   // منتشر شده
+  | 'discovery'
+  | 'planning'
+  | 'design'
+  | 'development'
+  | 'testing'
+  | 'published'
 
-/** Overall status of a project */
 export type ProjectStatus = 'active' | 'archived' | 'completed'
 
-/** Simple task inside a project workspace */
 export interface Task {
   id: string
   title: string
@@ -36,26 +32,38 @@ export interface Task {
   createdAt: string
 }
 
-/**
- * Main Project entity.
- * All related data (requirements, files, conversations, ...) will reference this id.
- */
+/** Single answer in the discovery questionnaire */
+export interface DiscoveryAnswer {
+  questionId: string
+  value: string
+}
+
+/** Full discovery / requirements data for a project */
+export interface DiscoveryData {
+  answers: DiscoveryAnswer[]
+  /** Free-text notes from the user */
+  notes: string
+  /** Whether the user has confirmed the requirements */
+  confirmed: boolean
+  /** ISO timestamp of last update */
+  updatedAt: string
+}
+
 export interface Project {
   id: string
   name: string
   type: ProjectType
   description: string
-  createdAt: string   // ISO string
-  updatedAt: string   // ISO string
+  createdAt: string
+  updatedAt: string
   stage: ProjectStage
   status: ProjectStatus
-  /** Optional language preference for the generated website content */
   language?: Language
-  /** Simple task list for Phase 1 */
   tasks?: Task[]
+  /** Phase 2: structured discovery answers */
+  discovery?: DiscoveryData
 }
 
-/** Result shape for storage operations */
 export type StorageResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string }

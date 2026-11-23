@@ -62,9 +62,7 @@ const fa = {
   statusArchived: 'بایگانی',
   statusCompleted: 'تکمیل‌شده',
   updatedAt: 'آخرین تغییر',
-  versionLabel: 'نسخه ۰.۳.۰',
-
-  // Phase 1
+  versionLabel: 'نسخه ۰.۴.۰',
   openProject: 'باز کردن',
   backToProjects: 'بازگشت به پروژه‌ها',
   projectWorkspace: 'محیط پروژه',
@@ -89,6 +87,36 @@ const fa = {
   projectInfo: 'اطلاعات پروژه',
   changeStage: 'تغییر مرحله',
   changeStatus: 'تغییر وضعیت',
+
+  // Phase 2 — Discovery
+  projectDiscovery: 'نیازسنجی',
+  discoveryTitle: 'شناخت نیازها',
+  discoverySubtitle: 'با پاسخ به چند سؤال، ایده خود را به مشخصات قابل اجرا تبدیل کن.',
+  discoveryNotes: 'یادداشت‌های اضافی',
+  discoveryNotesPlaceholder: 'هر نکته‌ای که فکر می‌کنی مهم است اینجا بنویس...',
+  saveDiscovery: 'ذخیره پاسخ‌ها',
+  confirmRequirements: 'تأیید نیازمندی‌ها و رفتن به مرحله بعد',
+  requirementsConfirmed: 'نیازمندی‌ها تأیید شد',
+  requirementsSummary: 'خلاصه نیازمندی‌ها',
+  discoveryProgress: 'پیشرفت نیازسنجی',
+  answeredOf: 'پاسخ داده‌شده از',
+  notAnswered: 'پاسخ داده نشده',
+  q_goal: 'هدف اصلی وب‌سایت چیست؟',
+  q_goal_hint: 'مثلاً: معرفی خدمات، فروش محصول، جذب مشتری، ارائه محتوا',
+  q_audience: 'مخاطبان اصلی چه کسانی هستند؟',
+  q_audience_hint: 'مثلاً: مشتریان محلی، دانشجویان، کسب‌وکارهای کوچک',
+  q_features: 'چه قابلیت‌هایی ضروری هستند؟',
+  q_features_hint: 'مثلاً: فرم تماس، سبد خرید، پنل کاربری، جستجو، گالری',
+  q_pages: 'چه صفحاتی نیاز داری؟',
+  q_pages_hint: 'مثلاً: صفحه اصلی، درباره ما، خدمات، تماس، وبلاگ',
+  q_content: 'محتوا از کجا تأمین می‌شود؟',
+  q_content_hint: 'مثلاً: خودم می‌نویسم، از مشتری می‌گیرم، هنوز مشخص نیست',
+  q_design: 'سبک ظاهری مورد علاقه‌ات چیست؟',
+  q_design_hint: 'مثلاً: مینیمال، مدرن، رسمی، رنگارنگ، تیره',
+  q_constraints: 'محدودیت‌های مهم چیست؟',
+  q_constraints_hint: 'مثلاً: بودجه کم، زمان محدود، نیاز به موبایل‌فرست بودن',
+  q_success: 'موفقیت این وب‌سایت را چطور می‌سنجی؟',
+  q_success_hint: 'مثلاً: تعداد بازدید، فروش، تماس‌های ورودی، ثبت‌نام',
 } as const
 
 const en = {
@@ -153,9 +181,7 @@ const en = {
   statusArchived: 'Archived',
   statusCompleted: 'Completed',
   updatedAt: 'Last updated',
-  versionLabel: 'Version 0.3.0',
-
-  // Phase 1
+  versionLabel: 'Version 0.4.0',
   openProject: 'Open',
   backToProjects: 'Back to projects',
   projectWorkspace: 'Project workspace',
@@ -180,6 +206,36 @@ const en = {
   projectInfo: 'Project info',
   changeStage: 'Change stage',
   changeStatus: 'Change status',
+
+  // Phase 2 — Discovery
+  projectDiscovery: 'Discovery',
+  discoveryTitle: 'Discover requirements',
+  discoverySubtitle: 'Answer a few questions to turn your idea into actionable specifications.',
+  discoveryNotes: 'Additional notes',
+  discoveryNotesPlaceholder: 'Write any extra notes you think are important...',
+  saveDiscovery: 'Save answers',
+  confirmRequirements: 'Confirm requirements & move to next stage',
+  requirementsConfirmed: 'Requirements confirmed',
+  requirementsSummary: 'Requirements summary',
+  discoveryProgress: 'Discovery progress',
+  answeredOf: 'answered of',
+  notAnswered: 'Not answered',
+  q_goal: 'What is the main goal of the website?',
+  q_goal_hint: 'e.g. present services, sell products, attract clients, publish content',
+  q_audience: 'Who are the primary users?',
+  q_audience_hint: 'e.g. local customers, students, small businesses',
+  q_features: 'Which features are essential?',
+  q_features_hint: 'e.g. contact form, shopping cart, user panel, search, gallery',
+  q_pages: 'Which pages do you need?',
+  q_pages_hint: 'e.g. home, about, services, contact, blog',
+  q_content: 'Where will the content come from?',
+  q_content_hint: 'e.g. I will write it, client provides it, not decided yet',
+  q_design: 'What visual style do you prefer?',
+  q_design_hint: 'e.g. minimal, modern, formal, colorful, dark',
+  q_constraints: 'What are the important constraints?',
+  q_constraints_hint: 'e.g. low budget, tight deadline, must be mobile-first',
+  q_success: 'How will you measure success?',
+  q_success_hint: 'e.g. visits, sales, inbound calls, sign-ups',
 } as const
 
 export type TranslationKeys = {
@@ -189,3 +245,17 @@ export type TranslationKeys = {
 export function getTranslations(language: Language): TranslationKeys {
   return language === 'fa' ? fa : en
 }
+
+/** Ordered list of discovery question ids */
+export const DISCOVERY_QUESTIONS = [
+  'q_goal',
+  'q_audience',
+  'q_features',
+  'q_pages',
+  'q_content',
+  'q_design',
+  'q_constraints',
+  'q_success',
+] as const
+
+export type DiscoveryQuestionId = (typeof DISCOVERY_QUESTIONS)[number]
