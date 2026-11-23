@@ -1403,6 +1403,92 @@ export default function App() {
               </section>
             )}
 
+
+            {/* PUBLISH */}
+            {workspaceTab === 'publish' && (
+              <section className="page-section">
+                <div className="page-title-row">
+                  <div>
+                    <div className="eyebrow">{t.projectPublish}</div>
+                    <h1>{t.publishTitle}</h1>
+                    <p style={{ color: 'var(--muted)' }}>{t.publishSubtitle}</p>
+                  </div>
+                  {saveMessage && <span className="save-toast">{saveMessage}</span>}
+                </div>
+
+                {(() => {
+                  const files = getFiles().filter(f => f.kind === 'file')
+                  const hasIndex = files.some(f => f.path === 'index.html' || f.path.endsWith('/index.html'))
+                  const discoveryOk = Boolean(activeProject.discovery?.confirmed)
+                  const tests = activeProject.testReport?.checks || []
+                  const criticalOk = tests.length > 0 && tests.filter(c => c.id === 'hasIndex' || c.id === 'notEmpty').every(c => c.ok)
+                  const qaKeys = ['qa_responsive', 'qa_content', 'qa_links', 'qa_images', 'qa_lang']
+                  const qaDone = qaKeys.filter(k => qaChecks[k]).length
+                  const qaOk = qaDone >= Math.ceil(qaKeys.length / 2)
+                  const items: { key: 'rd_discovery' | 'rd_index' | 'rd_files' | 'rd_tests' | 'rd_qa'; ok: boolean }[] = [
+                    { key: 'rd_discovery', ok: discoveryOk },
+                    { key: 'rd_index', ok: hasIndex },
+                    { key: 'rd_files', ok: files.length > 0 },
+                    { key: 'rd_tests', ok: criticalOk },
+                    { key: 'rd_qa', ok: qaOk },
+                  ]
+                  const score = items.filter(i => i.ok).length
+
+                  return (
+                    <>
+                      <div className="ai-block">
+                        <h3 className="ai-block-title">{t.readiness}</h3>
+                        <div className="qa-progress">{score} / {items.length}</div>
+                        <div className="qa-list">
+                          {items.map(item => (
+                            <div key={item.key} className={'qa-item ' + (item.ok ? 'done' : '')}>
+                              <span>{item.ok ? 'OK' : '!'}</span>
+                              <span>{t[item.key]}</span>
+                              <small>{item.ok ? t.readyYes : t.readyNo}</small>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="ai-block">
+                        <h3 className="ai-block-title">{t.publishChecklist}</h3>
+                        <div className="discovery-actions">
+                          <button type="button" className="primary-button" onClick={handleExportZip}>
+                            <Download size={16} />
+                            {t.exportZip}
+                          </button>
+                          <button type="button" className="secondary-button" onClick={handleExportBackup}>
+                            <Download size={16} />
+                            {t.exportBackup}
+                          </button>
+                          <button type="button" className="secondary-button" onClick={handleMarkPublished}>
+                            <Upload size={16} />
+                            {t.markPublished}
+                          </button>
+                        </div>
+                        {fileError ? <div className="form-error" style={{ marginTop: 10 }}>{fileError}</div> : null}
+                      </div>
+
+                      <div className="ai-block">
+                        <h3 className="ai-block-title">{t.deployGuide}</h3>
+                        <p className="ai-hint">{t.deployNote}</p>
+                        <div className="req-summary">
+                          <div className="req-item">
+                            <strong>GitHub Pages</strong>
+                            <p>{t.deployGh}</p>
+                          </div>
+                          <div className="req-item">
+                            <strong>Netlify / Cloudflare</strong>
+                            <p>{t.deployNetlify}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )
+                })()}
+              </section>
+            )}
+
 {/* TASKS */}
             {workspaceTab === 'tasks' && (
               <section className="page-section">

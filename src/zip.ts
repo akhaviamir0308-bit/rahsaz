@@ -102,7 +102,9 @@ export function buildZip(files: { path: string; content: string }[]): Blob {
   ])
 
   const zipBytes = concat([...localParts, centralDir, end])
-  return new Blob([zipBytes], { type: 'application/zip' })
+  const ab = new ArrayBuffer(zipBytes.byteLength)
+  new Uint8Array(ab).set(zipBytes)
+  return new Blob([ab], { type: 'application/zip' })
 }
 
 export function downloadBlob(filename: string, blob: Blob): void {
