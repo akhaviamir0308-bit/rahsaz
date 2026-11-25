@@ -5,7 +5,7 @@ import { uid } from '../uid'
  * Generate an actionable task list from requirements + architecture.
  */
 export function buildPlanTasks(
-  project: Project,
+  _project: Project,
   req?: RequirementsData,
   arch?: ArchitectureData,
   isFa?: boolean,
