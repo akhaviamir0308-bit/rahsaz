@@ -190,6 +190,23 @@ export async function buildReactPreview(files: ProjectFile[]): Promise<ReactPrev
               if (text === undefined) {
                 return { errors: [{ text: `Missing file: ${key}` }] }
               }
+              // CSS imported from JS/TS cannot use css loader with write:false
+              // Inject as a <style> tag at runtime instead.
+              if (key.endsWith('.css')) {
+                return {
+                  contents: `
+const css = ${JSON.stringify(text)};
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.setAttribute('data-rahsaz-href', ${JSON.stringify(key)});
+  style.textContent = css;
+  document.head.appendChild(style);
+}
+export default css;
+`,
+                  loader: 'js',
+                }
+              }
               return { contents: text, loader: pickLoader(key) }
             })
 
