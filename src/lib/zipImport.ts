@@ -19,8 +19,10 @@ async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
   if (typeof DecompressionStream === 'undefined') {
     throw new Error('deflate')
   }
+  const copy = new ArrayBuffer(data.byteLength)
+  new Uint8Array(copy).set(data)
   const ds = new DecompressionStream('deflate-raw')
-  const stream = new Blob([data]).stream().pipeThrough(ds)
+  const stream = new Blob([copy]).stream().pipeThrough(ds)
   const ab = await new Response(stream).arrayBuffer()
   return new Uint8Array(ab)
 }
