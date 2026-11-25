@@ -214,3 +214,4 @@
 [data-theme="light"] .ai-warn{background:#fef3c7;color:#78350f;border-color:#f59e0b}
 
 .files-folder-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px}
+.spin{animation:rahsaz-spin 1s linear infinite}@keyframes rahsaz-spin{to{transform:rotate(360deg)}}
