@@ -27,6 +27,7 @@ import {
 import { buildRequirements, requirementsToMarkdown } from './lib/requirementsEngine'
 import { suggestArchitecture, architectureToMarkdown } from './lib/architectureAdvisor'
 import { buildPlanTasks } from './lib/planningEngine'
+import { importZipFiles } from './lib/zipImport'
 import {
   loadProjects, createProject as storageCreate,
   deleteProject as storageDelete, updateProject as storageUpdate, storageInfo,
@@ -95,6 +96,7 @@ export default function App() {
 
   // Files
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
+  const [currentFolder, setCurrentFolder] = useState('')
   const [editorContent, setEditorContent] = useState('')
   const [editorDirty, setEditorDirty] = useState(false)
   const [newPath, setNewPath] = useState('')
@@ -154,6 +156,7 @@ export default function App() {
     setPasteText('')
     setCopied(false)
     setSelectedFileId(null)
+    setCurrentFolder('')
     setEditorContent('')
     setEditorDirty(false)
     setNewPath('')
@@ -395,7 +398,15 @@ export default function App() {
   const handleCreateFile = useCallback((kind: 'file' | 'folder') => {
     if (!activeProject) return
     setFileError('')
-    const path = normalizePath(newPath)
+    let raw = newPath.trim()
+    // If user types a bare name, put it under current folder
+    if (raw && !raw.includes('/') && currentFolder) {
+      raw = currentFolder.replace(/\/+$/, '') + '/' + raw
+    } else if (!raw && currentFolder && kind === 'file') {
+      setFileError(t.invalidPath)
+      return
+    }
+    const path = normalizePath(raw)
     if (!path || path.includes('..')) {
       setFileError(t.invalidPath)
       return
@@ -433,15 +444,25 @@ export default function App() {
       setEditorContent('')
       setEditorDirty(false)
     }
-  }, [activeProject, newPath, getFiles, persistFiles, t])
+  }, [activeProject, newPath, currentFolder, getFiles, persistFiles, t])
 
   const handleSelectFile = useCallback((file: ProjectFile) => {
+    if (file.kind === 'folder') {
+      setCurrentFolder(file.path)
+      setNewPath(file.path.endsWith('/') ? file.path : file.path + '/')
+      setSelectedFileId(null)
+      setFileError('')
+      return
+    }
     if (file.kind !== 'file') return
     if (editorDirty && file.id !== selectedFileId && !window.confirm(t.confirmDiscardEdits)) return
     setSelectedFileId(file.id)
     setEditorContent(file.content || '')
     setEditorDirty(false)
     setFileError('')
+    // keep parent folder as context
+    const parent = file.path.includes('/') ? file.path.split('/').slice(0, -1).join('/') : ''
+    setCurrentFolder(parent)
   }, [editorDirty, selectedFileId, t])
 
   const handleSaveFile = useCallback(() => {
@@ -851,6 +872,55 @@ Created with Rahsaz.
     } else setStorageError(result.error)
   }, [activeProject, isFa, projects, t])
 
+
+
+  const handleImportZip = useCallback(async (fileList: FileList | null) => {
+    if (!activeProject || !fileList || fileList.length === 0) return
+    const file = fileList[0]
+    if (!window.confirm(t.importZipConfirm)) return
+    try {
+      const buf = await file.arrayBuffer()
+      const imported = await importZipFiles(buf)
+      if (imported.length === 0) {
+        setFileError(t.importZipEmpty)
+        return
+      }
+      const now = new Date().toISOString()
+      const byPath = new Map(getFiles().map(f => [f.path, f]))
+      for (const item of imported) {
+        const path = normalizePath(item.path)
+        if (!path || path.includes('..')) continue
+        // ensure parent folder entries exist
+        const segs = path.split('/')
+        for (let i = 0; i < segs.length - 1; i++) {
+          const folderPath = segs.slice(0, i + 1).join('/')
+          if (!byPath.has(folderPath)) {
+            byPath.set(folderPath, {
+              id: uid(),
+              path: folderPath,
+              kind: 'folder' as const,
+              updatedAt: now,
+            })
+          }
+        }
+        const prev = byPath.get(path)
+        byPath.set(path, {
+          id: prev?.id || uid(),
+          path,
+          kind: 'file',
+          content: item.content,
+          updatedAt: now,
+        })
+      }
+      const next = Array.from(byPath.values()).sort((a, b) => a.path.localeCompare(b.path))
+      persistFiles(next)
+      setSaveMessage(t.importZipDone + ` (${imported.length})`)
+      setTimeout(() => setSaveMessage(''), 3000)
+      setFileError('')
+    } catch {
+      setFileError(t.importZipFail)
+    }
+  }, [activeProject, getFiles, persistFiles, t])
 
   const nav = [
     { id: 'overview' as const, label: t.overview, icon: Compass },
@@ -1403,12 +1473,19 @@ Created with Rahsaz.
                   {saveMessage && <span className="save-toast">{saveMessage}</span>}
                 </div>
 
+                <div className="files-folder-bar">
+                  <span className="ai-hint">{t.currentFolder}: <strong>{currentFolder || t.rootFolder}</strong></span>
+                  {currentFolder ? (
+                    <button type="button" className="text-button" onClick={() => { setCurrentFolder(''); setNewPath('') }}>{t.rootFolder}</button>
+                  ) : null}
+                  <span className="ai-hint">{t.selectFolderHint}</span>
+                </div>
                 <div className="files-toolbar">
                   <input
                     type="text"
                     value={newPath}
                     onChange={e => setNewPath(e.target.value)}
-                    placeholder={t.fileNamePlaceholder}
+                    placeholder={currentFolder ? (currentFolder + '/...') : t.fileNamePlaceholder}
                     className="files-path-input"
                   />
                   <button type="button" className="secondary-button" onClick={() => handleCreateFile('file')}>
@@ -1417,6 +1494,16 @@ Created with Rahsaz.
                   <button type="button" className="secondary-button" onClick={() => handleCreateFile('folder')}>
                     <FolderPlus size={16} />{t.createFolder}
                   </button>
+                  <label className="secondary-button" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Upload size={16} />
+                    {t.importZip}
+                    <input
+                      type="file"
+                      accept=".zip,application/zip"
+                      style={{ display: 'none' }}
+                      onChange={e => { void handleImportZip(e.target.files); e.target.value = '' }}
+                    />
+                  </label>
                   <button type="button" className="secondary-button" onClick={handleSeedStarter} title={t.seedStarterDesc}>
                     {t.seedStarter}
                   </button>
@@ -1437,12 +1524,11 @@ Created with Rahsaz.
                     ) : (
                       <ul className="file-list">
                         {getFiles().map(f => (
-                          <li key={f.id} className={`file-row ${selectedFileId === f.id ? 'active' : ''}`}>
+                          <li key={f.id} className={`file-row ${selectedFileId === f.id ? 'active' : ''} ${f.kind === 'folder' && currentFolder === f.path ? 'active' : ''}`}>
                             <button
                               type="button"
                               className="file-open"
                               onClick={() => handleSelectFile(f)}
-                              disabled={f.kind === 'folder'}
                             >
                               {f.kind === 'folder' ? '📁' : '📄'} {f.path}
                             </button>
