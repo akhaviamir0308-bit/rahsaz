@@ -1,29 +1,13 @@
-# Rahsaz — v0.10.2
+# Rahsaz — v0.11.0
 
-Local-first, bilingual (fa/en) website-building workspace with AI-assisted workflow, academy, file tree, preview, versioning, and publish export.
+Closer alignment with the product document: requirements engine, architecture advisor, planning engine, and guided next steps.
 
-## Maintenance release (0.10.2)
-- Storage key updated to `rahsaz.projects.v0102` (migrates from older keys)
-- `@vitejs/plugin-react` moved to `devDependencies`
-- Stale `package-lock.json` removed (run `npm install` to regenerate)
-- `ProjectCard` extracted to `src/components/ProjectCard.tsx`
-- Prompt / next-step helpers moved to `src/lib/workspaceMeta.ts`
-- Types and storage headers updated to current version
-
-## Structure
-```
-src/
-  App.tsx                 # shell: dashboard + workspace orchestration
-  components/
-    LearnView.tsx
-    PreviewPane.tsx
-    ProjectCard.tsx
-  lib/
-    workspaceMeta.ts      # prompts, QA keys, next-step coach
-  data/                   # translations, learn content, demo
-  storage.ts              # localStorage + migrations
-  preview.ts / zip.ts     # preview builder + ZIP export
-```
+## New in 0.11.0
+- **Requirements tab**: generate structured requirements from discovery, confirm, export `docs/requirements.md`
+- **Architecture tab**: suggest approach + stack + pages, confirm, export `docs/ARCHITECTURE.md`
+- **Planning**: generate prioritized tasks from requirements + architecture
+- **Workflow coach** updated for the full path: Discovery → Requirements → Architecture → Plan → AI → Files → Preview → Publish
+- Storage key `rahsaz.projects.v0110` (migrates from older keys)
 
 ## Run
 ```bash
@@ -36,5 +20,5 @@ npm run dev
 npm run build
 ```
 
-## Note on architecture
-Further splits (FilesPanel, DiscoveryForm, AiAssistant as standalone components and a `useProjects` hook) are the recommended next refactor. Preview and Learn are already modular.
+## Note
+This is still local-first (browser storage). Full document vision (real CI for user apps, hosted deploy APIs, IndexedDB scale) remains incremental.

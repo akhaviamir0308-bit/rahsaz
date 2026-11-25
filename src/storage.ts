@@ -1,15 +1,17 @@
 /**
- * Persistence layer for RahSaz v0.10.2
+ * Persistence layer for RahSaz v0.11.0
  */
 
 import { uid } from './uid'
 import type {
   Project, StorageResult, Task, DiscoveryData, AiData, AiMessage, FilesData, ProjectFile, QaData,
   TestReport, VersionsData, VersionSnapshot, TestCheck,
+  RequirementsData, RequirementItem, ArchitectureData,
 } from './types'
 
-const STORAGE_KEY = 'rahsaz.projects.v0102'
+const STORAGE_KEY = 'rahsaz.projects.v0110'
 const LEGACY_KEYS = [
+  'rahsaz.projects.v0102',
   'rahsaz.projects.v080',
   'rahsaz.projects.v070',
   'rahsaz.projects.v060',
@@ -55,6 +57,8 @@ function migrateProject(p: any): Project {
     language: p.language === 'en' || p.language === 'fa' ? p.language : undefined,
     tasks: Array.isArray(p.tasks) ? p.tasks.map(normalizeTask).filter(Boolean) as Task[] : [],
     discovery: normalizeDiscovery(p.discovery),
+    requirements: normalizeRequirements(p.requirements),
+    architecture: normalizeArchitecture(p.architecture),
     ai: normalizeAi(p.ai),
     files: normalizeFiles(p.files),
     qa: normalizeQa(p.qa),
@@ -70,6 +74,9 @@ function normalizeTask(t: any): Task | null {
     title: t.title,
     done: Boolean(t.done),
     createdAt: typeof t.createdAt === 'string' ? t.createdAt : new Date().toISOString(),
+    priority: t.priority === 2 || t.priority === 3 ? t.priority : t.priority === 1 ? 1 : undefined,
+    description: typeof t.description === 'string' ? t.description : undefined,
+    source: t.source === 'planning' || t.source === 'ai' || t.source === 'manual' ? t.source : undefined,
   }
 }
 
@@ -155,6 +162,41 @@ function normalizeVersions(v: any): VersionsData | undefined {
   }
 }
 
+
+function normalizeRequirements(r: any): RequirementsData | undefined {
+  if (!r || typeof r !== 'object') return undefined
+  const items: RequirementItem[] = Array.isArray(r.items)
+    ? r.items.filter((i: any) => i && typeof i.id === 'string' && typeof i.title === 'string').map((i: any) => ({
+        id: i.id,
+        title: i.title,
+        description: typeof i.description === 'string' ? i.description : '',
+        kind: (['functional','non_functional','constraint','open_question'].includes(i.kind) ? i.kind : 'functional') as RequirementItem['kind'],
+        priority: (i.priority === 2 || i.priority === 3 ? i.priority : 1) as 1|2|3,
+        sourceQuestionIds: Array.isArray(i.sourceQuestionIds) ? i.sourceQuestionIds.filter((x: any) => typeof x === 'string') : [],
+      }))
+    : []
+  return {
+    items,
+    summary: typeof r.summary === 'string' ? r.summary : '',
+    confirmed: Boolean(r.confirmed),
+    updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : new Date().toISOString(),
+  }
+}
+
+function normalizeArchitecture(a: any): ArchitectureData | undefined {
+  if (!a || typeof a !== 'object') return undefined
+  const approaches = ['static','dynamic','webapp','store','booking','content']
+  return {
+    approach: approaches.includes(a.approach) ? a.approach : 'static',
+    approachLabel: typeof a.approachLabel === 'string' ? a.approachLabel : String(a.approach || 'static'),
+    stack: Array.isArray(a.stack) ? a.stack.filter((x: any) => typeof x === 'string') : [],
+    rationale: typeof a.rationale === 'string' ? a.rationale : '',
+    pages: Array.isArray(a.pages) ? a.pages.filter((x: any) => typeof x === 'string') : [],
+    confirmed: Boolean(a.confirmed),
+    updatedAt: typeof a.updatedAt === 'string' ? a.updatedAt : new Date().toISOString(),
+  }
+}
+
 function normalizeQa(q: any): QaData | undefined {
   if (!q || typeof q !== 'object') return undefined
   const checks: Record<string, boolean> = {}
@@ -196,6 +238,8 @@ function normalizeProject(p: any): Project | null {
     language: p.language === 'en' || p.language === 'fa' ? p.language : undefined,
     tasks: Array.isArray(p.tasks) ? p.tasks.map(normalizeTask).filter(Boolean) as Task[] : [],
     discovery: normalizeDiscovery(p.discovery),
+    requirements: normalizeRequirements(p.requirements),
+    architecture: normalizeArchitecture(p.architecture),
     ai: normalizeAi(p.ai),
     files: normalizeFiles(p.files),
     qa: normalizeQa(p.qa),
@@ -264,7 +308,7 @@ export function deleteProject(id: string, current: Project[]): StorageResult<Pro
 
 export function updateProject(
   id: string,
-  patch: Partial<Pick<Project, 'name' | 'description' | 'type' | 'stage' | 'status' | 'language' | 'tasks' | 'discovery' | 'ai' | 'files' | 'qa' | 'testReport' | 'versions'>>,
+  patch: Partial<Pick<Project, 'name' | 'description' | 'type' | 'stage' | 'status' | 'language' | 'tasks' | 'discovery' | 'requirements' | 'architecture' | 'ai' | 'files' | 'qa' | 'testReport' | 'versions'>>,
   current: Project[]
 ): StorageResult<Project[]> {
   const index = current.findIndex((p) => p.id === id)
@@ -276,6 +320,8 @@ export function updateProject(
   if (patch.description !== undefined) updated.description = patch.description.trim()
   if (patch.tasks !== undefined) updated.tasks = patch.tasks
   if (patch.discovery !== undefined) updated.discovery = patch.discovery
+  if (patch.requirements !== undefined) updated.requirements = patch.requirements
+  if (patch.architecture !== undefined) updated.architecture = patch.architecture
   if (patch.ai !== undefined) updated.ai = patch.ai
   if (patch.files !== undefined) updated.files = patch.files
   if (patch.qa !== undefined) updated.qa = patch.qa

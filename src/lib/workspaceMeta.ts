@@ -5,8 +5,8 @@ import type { Project } from '../types'
 import type { TranslationKeys } from '../data/translations'
 
 export type WorkspaceTab =
-  | 'learn' | 'overview' | 'discovery' | 'ai' | 'files'
-  | 'preview' | 'versions' | 'publish' | 'tasks' | 'settings'
+  | 'learn' | 'overview' | 'discovery' | 'requirements' | 'architecture'
+  | 'ai' | 'files' | 'preview' | 'versions' | 'publish' | 'tasks' | 'settings'
 
 export function buildProjectContext(project: Project, t: TranslationKeys, isFa: boolean): string {
   const lines: string[] = []
@@ -100,9 +100,15 @@ export function computeNextStep(p: Project, qaDone: number): NextStep {
   const filesUpdated = p.files?.updatedAt || ''
   if (p.stage === 'published') return { tab: 'tasks', fa: 'پروژه منتشر شده است. برای قابلیت بعدی یک کار جدید بنویسید یا پروژه دوم را شروع کنید.', en: 'This project is published. Add a task for the next feature or start a second project.' }
   if (answers < 3) return { tab: 'discovery', fa: 'در نیازسنجی حداقل ۳ سؤال را جواب بدهید.', en: 'Answer at least 3 questions in Discovery.' }
-  if (!p.discovery?.confirmed) return { tab: 'discovery', fa: 'نیازمندی‌ها را تأیید کنید تا به مرحله برنامه‌ریزی بروید.', en: 'Confirm the requirements to move to Planning.' }
+  if (!p.discovery?.confirmed) return { tab: 'discovery', fa: 'نیازسنجی را تأیید کنید.', en: 'Confirm discovery answers.' }
+  if (!p.requirements?.items?.length) return { tab: 'requirements', fa: 'سند نیازمندی‌ها را از روی نیازسنجی بسازید و بررسی کنید.', en: 'Generate and review the requirements document from discovery.' }
+  if (!p.requirements?.confirmed) return { tab: 'requirements', fa: 'سند نیازمندی‌ها را تأیید کنید.', en: 'Confirm the requirements document.' }
+  if (!p.architecture?.stack?.length) return { tab: 'architecture', fa: 'پیشنهاد معماری و استک را ببینید و تأیید کنید.', en: 'Review and confirm architecture and stack.' }
+  if (!p.architecture?.confirmed) return { tab: 'architecture', fa: 'معماری پیشنهادی را تأیید کنید.', en: 'Confirm the suggested architecture.' }
+  const planTasks = (p.tasks || []).filter(t => t.source === 'planning')
+  if (planTasks.length === 0) return { tab: 'tasks', fa: 'برنامه وظایف را از روی نیازمندی و معماری بسازید.', en: 'Generate the task plan from requirements and architecture.' }
   if (!(p.ai?.messages?.length)) return { tab: 'ai', fa: 'از دستیار AI یک پرامپت بسازید و پاسخ را ذخیره کنید (مثلاً ساختار صفحات).', en: 'Build a prompt in the AI assistant and save the answer (e.g. page structure).' }
-  if (files.length === 0) return { tab: 'files', fa: 'فایل index.html را بسازید و کد دریافتی از AI را در آن بگذارید.', en: 'Create index.html and put the code from the AI into it.' }
+  if (files.length === 0) return { tab: 'files', fa: 'فایل index.html را بسازید و کد را وارد کنید.', en: 'Create index.html and add code.' }
   if (!(p.versions?.snapshots?.length)) return { tab: 'versions', fa: 'یک نسخه سالم از وضعیت فعلی بگیرید.', en: 'Take a known-good snapshot of the current state.' }
   if (!p.testReport || p.testReport.ranAt < filesUpdated) return { tab: 'versions', fa: 'تست‌ها را اجرا کنید (فایل‌ها از آخرین تست تغییر کرده‌اند).', en: 'Run the tests (files changed since the last test).' }
   if (qaDone < 3) return { tab: 'preview', fa: 'سایت را در پیش‌نمایش ببینید و چک‌لیست کیفیت را کامل کنید.', en: 'View the site in Preview and complete the QA checklist.' }

@@ -5,7 +5,7 @@ import {
   WandSparkles, Code2, Rocket, PanelLeftClose, AlertTriangle,
   CheckCircle2, Circle, ListTodo, Info, ChevronLeft, ClipboardList,
   Bot, Copy, Check, MessageSquare, FileCode2, FolderPlus, FilePlus2, Eye,
-  History, FlaskConical, RotateCcw, Upload, Download, GraduationCap, HelpCircle, ArrowLeft, FileText
+  History, FlaskConical, RotateCcw, Upload, Download, GraduationCap, HelpCircle, ArrowLeft, FileText, Network
 } from 'lucide-react'
 import type {
   Language, Project, ProjectType, ProjectStage, ProjectStatus,
@@ -24,6 +24,9 @@ import {
   computeNextStep,
   type WorkspaceTab,
 } from './lib/workspaceMeta'
+import { buildRequirements, requirementsToMarkdown } from './lib/requirementsEngine'
+import { suggestArchitecture, architectureToMarkdown } from './lib/architectureAdvisor'
+import { buildPlanTasks } from './lib/planningEngine'
 import {
   loadProjects, createProject as storageCreate,
   deleteProject as storageDelete, updateProject as storageUpdate, storageInfo,
@@ -275,15 +278,17 @@ export default function App() {
   const handleConfirmDiscovery = useCallback(() => {
     if (!activeProject) return
     const discovery = buildDiscoveryData(true)
-    const result = storageUpdate(activeProject.id, { discovery, stage: 'planning' }, projects)
+    const draft: Project = { ...activeProject, discovery }
+    const requirements = buildRequirements(draft, isFa)
+    const result = storageUpdate(activeProject.id, { discovery, requirements, stage: 'planning' }, projects)
     if (result.ok) {
       setProjects(result.data)
       setEditStage('planning')
       setSaveMessage(t.requirementsConfirmed)
       setTimeout(() => setSaveMessage(''), 3000)
-      setWorkspaceTab('overview')
+      setWorkspaceTab('requirements')
     } else setStorageError(result.error)
-  }, [activeProject, buildDiscoveryData, projects, t])
+  }, [activeProject, buildDiscoveryData, projects, t, isFa])
 
   // AI handlers
   const handleBuildPrompt = useCallback(() => {
@@ -755,6 +760,98 @@ Created with Rahsaz.
     if (id.startsWith('goto:')) openTab(id.slice(5) as WorkspaceTab)
   }, [language, projects, openProject, openTab])
 
+
+  const upsertProjectFile = useCallback((pathName: string, content: string) => {
+    if (!activeProject) return
+    const now = new Date().toISOString()
+    const files = [...getFiles()]
+    const idx = files.findIndex(f => f.path === pathName)
+    if (idx >= 0) {
+      files[idx] = { ...files[idx], content, updatedAt: now, kind: 'file' as const }
+    } else {
+      files.push({ id: uid(), path: pathName, kind: 'file' as const, content, updatedAt: now })
+    }
+    files.sort((a, b) => a.path.localeCompare(b.path))
+    persistFiles(files)
+  }, [activeProject, getFiles, persistFiles])
+
+  const handleGenerateRequirements = useCallback(() => {
+    if (!activeProject) return
+    const requirements = buildRequirements(activeProject, isFa)
+    const result = storageUpdate(activeProject.id, { requirements }, projects)
+    if (result.ok) {
+      setProjects(result.data)
+      setSaveMessage(t.reqTitle)
+      setTimeout(() => setSaveMessage(''), 2000)
+    } else setStorageError(result.error)
+  }, [activeProject, isFa, projects, t])
+
+  const handleConfirmRequirements = useCallback(() => {
+    if (!activeProject?.requirements) return
+    const requirements = { ...activeProject.requirements, confirmed: true, updatedAt: new Date().toISOString() }
+    const result = storageUpdate(activeProject.id, { requirements, stage: 'planning' }, projects)
+    if (result.ok) {
+      setProjects(result.data)
+      setEditStage('planning')
+      setSaveMessage(t.reqConfirmed)
+      setTimeout(() => setSaveMessage(''), 2000)
+    } else setStorageError(result.error)
+  }, [activeProject, projects, t])
+
+  const handleExportRequirementsMd = useCallback(() => {
+    if (!activeProject?.requirements) return
+    const md = requirementsToMarkdown(activeProject, activeProject.requirements, isFa)
+    upsertProjectFile('docs/requirements.md', md)
+    setSaveMessage(t.reqExportMd)
+    setTimeout(() => setSaveMessage(''), 2000)
+  }, [activeProject, isFa, upsertProjectFile, t])
+
+  const handleGenerateArchitecture = useCallback(() => {
+    if (!activeProject) return
+    const architecture = suggestArchitecture(activeProject, isFa)
+    const result = storageUpdate(activeProject.id, { architecture }, projects)
+    if (result.ok) {
+      setProjects(result.data)
+      setSaveMessage(t.archTitle)
+      setTimeout(() => setSaveMessage(''), 2000)
+    } else setStorageError(result.error)
+  }, [activeProject, isFa, projects, t])
+
+  const handleConfirmArchitecture = useCallback(() => {
+    if (!activeProject?.architecture) return
+    const architecture = { ...activeProject.architecture, confirmed: true, updatedAt: new Date().toISOString() }
+    const result = storageUpdate(activeProject.id, { architecture }, projects)
+    if (result.ok) {
+      setProjects(result.data)
+      setSaveMessage(t.archConfirmed)
+      setTimeout(() => setSaveMessage(''), 2000)
+    } else setStorageError(result.error)
+  }, [activeProject, projects, t])
+
+  const handleExportArchitectureMd = useCallback(() => {
+    if (!activeProject?.architecture) return
+    const md = architectureToMarkdown(activeProject, activeProject.architecture, isFa)
+    upsertProjectFile('docs/ARCHITECTURE.md', md)
+    setSaveMessage(t.archExportMd)
+    setTimeout(() => setSaveMessage(''), 2000)
+  }, [activeProject, isFa, upsertProjectFile, t])
+
+  const handleGeneratePlan = useCallback(() => {
+    if (!activeProject) return
+    const generated = buildPlanTasks(activeProject, activeProject.requirements, activeProject.architecture, isFa)
+    const existingManual = (activeProject.tasks || []).filter(tk => tk.source !== 'planning')
+    const tasks = [...generated, ...existingManual]
+    const result = storageUpdate(activeProject.id, { tasks, stage: 'planning' }, projects)
+    if (result.ok) {
+      setProjects(result.data)
+      setEditStage('planning')
+      setWorkspaceTab('tasks')
+      setSaveMessage(t.planGenerated)
+      setTimeout(() => setSaveMessage(''), 2500)
+    } else setStorageError(result.error)
+  }, [activeProject, isFa, projects, t])
+
+
   const nav = [
     { id: 'overview' as const, label: t.overview, icon: Compass },
     { id: 'projects' as const, label: t.projects, icon: FolderKanban },
@@ -801,6 +898,8 @@ Created with Rahsaz.
             {[
               { id: 'overview' as const, label: t.projectOverview, icon: Info },
               { id: 'discovery' as const, label: t.projectDiscovery, icon: ClipboardList },
+              { id: 'requirements' as const, label: t.projectRequirements, icon: FileText },
+              { id: 'architecture' as const, label: t.projectArchitecture, icon: Network },
               { id: 'ai' as const, label: t.projectAi, icon: Bot },
               { id: 'files' as const, label: t.projectFiles, icon: FileCode2 },
               { id: 'preview' as const, label: t.projectPreview, icon: Eye },
@@ -841,6 +940,8 @@ Created with Rahsaz.
               <span>
                 {workspaceTab === 'overview' ? t.projectOverview
                   : workspaceTab === 'discovery' ? t.projectDiscovery
+                  : workspaceTab === 'requirements' ? t.projectRequirements
+                  : workspaceTab === 'architecture' ? t.projectArchitecture
                   : workspaceTab === 'ai' ? t.projectAi
                   : workspaceTab === 'files' ? t.projectFiles
                   : workspaceTab === 'preview' ? t.projectPreview
@@ -1061,6 +1162,79 @@ Created with Rahsaz.
               </section>
             )}
 
+
+            {/* REQUIREMENTS */}
+            {workspaceTab === 'requirements' && (
+              <section className="page-section">
+                <div className="page-title-row">
+                  <div>
+                    <div className="eyebrow">{t.projectRequirements}</div>
+                    <h1>{t.reqTitle}</h1>
+                    <p style={{ color: 'var(--muted)' }}>{t.reqSubtitle}</p>
+                  </div>
+                  {saveMessage && <span className="save-toast">{saveMessage}</span>}
+                </div>
+                <div className="discovery-actions" style={{ marginBottom: 16 }}>
+                  <button type="button" className="primary-button" onClick={handleGenerateRequirements}>{t.reqGenerate}</button>
+                  <button type="button" className="secondary-button" onClick={handleConfirmRequirements} disabled={!activeProject.requirements?.items?.length}>{t.reqConfirm}</button>
+                  <button type="button" className="secondary-button" onClick={handleExportRequirementsMd} disabled={!activeProject.requirements?.items?.length}>{t.reqExportMd}</button>
+                </div>
+                {!activeProject.requirements?.items?.length ? (
+                  <p className="ai-hint">{t.reqEmpty}</p>
+                ) : (
+                  <div className="ai-block">
+                    <h3 className="ai-block-title">{t.reqSummary}</h3>
+                    <p>{activeProject.requirements.summary}</p>
+                    {activeProject.requirements.confirmed && <p style={{ color: 'var(--green)' }}>{t.reqConfirmed}</p>}
+                    <div className="req-summary" style={{ marginTop: 16 }}>
+                      {activeProject.requirements.items.map(item => (
+                        <div key={item.id} className="req-item">
+                          <strong>{item.title}</strong>
+                          <p>{item.description}</p>
+                          <small>{item.kind} · P{item.priority}</small>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* ARCHITECTURE */}
+            {workspaceTab === 'architecture' && (
+              <section className="page-section">
+                <div className="page-title-row">
+                  <div>
+                    <div className="eyebrow">{t.projectArchitecture}</div>
+                    <h1>{t.archTitle}</h1>
+                    <p style={{ color: 'var(--muted)' }}>{t.archSubtitle}</p>
+                  </div>
+                  {saveMessage && <span className="save-toast">{saveMessage}</span>}
+                </div>
+                <div className="discovery-actions" style={{ marginBottom: 16 }}>
+                  <button type="button" className="primary-button" onClick={handleGenerateArchitecture}>{t.archGenerate}</button>
+                  <button type="button" className="secondary-button" onClick={handleConfirmArchitecture} disabled={!activeProject.architecture}>{t.archConfirm}</button>
+                  <button type="button" className="secondary-button" onClick={handleExportArchitectureMd} disabled={!activeProject.architecture}>{t.archExportMd}</button>
+                  <button type="button" className="secondary-button" onClick={handleGeneratePlan}>{t.planGenerate}</button>
+                </div>
+                {!activeProject.architecture ? (
+                  <p className="ai-hint">{t.archEmpty}</p>
+                ) : (
+                  <div className="ai-block">
+                    {activeProject.architecture.confirmed && <p style={{ color: 'var(--green)' }}>{t.archConfirmed}</p>}
+                    <h3 className="ai-block-title">{t.archApproach}</h3>
+                    <p><strong>{activeProject.architecture.approachLabel}</strong></p>
+                    <h3 className="ai-block-title">{t.archRationale}</h3>
+                    <p>{activeProject.architecture.rationale}</p>
+                    <h3 className="ai-block-title">{t.archStack}</h3>
+                    <ul>{activeProject.architecture.stack.map(s => <li key={s}>{s}</li>)}</ul>
+                    <h3 className="ai-block-title">{t.archPages}</h3>
+                    <ul>{activeProject.architecture.pages.map(s => <li key={s}>{s}</li>)}</ul>
+                  </div>
+                )}
+              </section>
+            )}
+
             {/* AI ASSISTANT — redesigned clear flow */}
             {workspaceTab === 'ai' && (
               <section className="page-section">
@@ -1247,7 +1421,7 @@ Created with Rahsaz.
                     {t.seedStarter}
                   </button>
                   <button type="button" className="secondary-button" onClick={handleControlDocs} title={isFa ? 'ساخت docs/spec.txt، decisions.txt و status.txt از اطلاعات پروژه' : 'Create docs/spec.txt, decisions.txt and status.txt from project data'}>
-                    <FileText size={16} />{isFa ? 'دفتر کنترل پروژه' : 'Project control log'}
+                    <FileText, Network size={16} />{isFa ? 'دفتر کنترل پروژه' : 'Project control log'}
                   </button>
                 </div>
                 {fileError && <div className="form-error" style={{ marginBottom: 12 }}>{fileError}</div>}

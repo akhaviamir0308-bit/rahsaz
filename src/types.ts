@@ -1,5 +1,6 @@
 /**
- * Core types for RahSaz v0.10.2
+ * Core types for RahSaz v0.11.0
+ * Aligned with product document (first practical version).
  */
 
 export type Language = 'fa' | 'en'
@@ -20,6 +21,12 @@ export interface Task {
   title: string
   done: boolean
   createdAt: string
+  /** optional priority 1 high – 3 low */
+  priority?: 1 | 2 | 3
+  /** optional description */
+  description?: string
+  /** source: manual | planning | ai */
+  source?: 'manual' | 'planning' | 'ai'
 }
 
 export interface DiscoveryAnswer {
@@ -34,12 +41,43 @@ export interface DiscoveryData {
   updatedAt: string
 }
 
+/** Structured requirement item derived from discovery */
+export interface RequirementItem {
+  id: string
+  title: string
+  description: string
+  kind: 'functional' | 'non_functional' | 'constraint' | 'open_question'
+  priority: 1 | 2 | 3
+  sourceQuestionIds: string[]
+}
+
+export interface RequirementsData {
+  items: RequirementItem[]
+  summary: string
+  confirmed: boolean
+  updatedAt: string
+}
+
+/** Architecture / tech recommendation */
+export interface ArchitectureData {
+  approach: 'static' | 'dynamic' | 'webapp' | 'store' | 'booking' | 'content'
+  approachLabel: string
+  stack: string[]
+  rationale: string
+  pages: string[]
+  confirmed: boolean
+  updatedAt: string
+}
+
 export interface AiMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
   label?: string
   createdAt: string
+  /** optional link to task or file path */
+  linkedTaskId?: string
+  linkedFilePath?: string
 }
 
 export interface AiData {
@@ -47,14 +85,10 @@ export interface AiData {
   updatedAt: string
 }
 
-/** Virtual file or folder in the project workspace */
 export interface ProjectFile {
   id: string
-  /** Path relative to project root, e.g. "src/App.tsx" or "index.html" */
   path: string
-  /** "file" or "folder" */
   kind: 'file' | 'folder'
-  /** Text content (only for files) */
   content?: string
   updatedAt: string
 }
@@ -69,7 +103,6 @@ export interface QaData {
   updatedAt: string
 }
 
-/** Automated file checks result */
 export interface TestCheck {
   id: string
   labelKey: string
@@ -82,13 +115,11 @@ export interface TestReport {
   ranAt: string
 }
 
-/** Snapshot of project files for restore */
 export interface VersionSnapshot {
   id: string
   label: string
   note: string
   createdAt: string
-  /** Serialized files array at snapshot time */
   files: ProjectFile[]
   stage: ProjectStage
 }
@@ -110,6 +141,8 @@ export interface Project {
   language?: Language
   tasks?: Task[]
   discovery?: DiscoveryData
+  requirements?: RequirementsData
+  architecture?: ArchitectureData
   ai?: AiData
   files?: FilesData
   qa?: QaData
