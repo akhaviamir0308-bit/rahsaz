@@ -1,6 +1,6 @@
 /**
  * In-browser React/Vite-style preview using esbuild-wasm.
- * Bundles the virtual file tree and loads bare imports from esm.sh.
+ * Bundles the virtual file tree; bare imports load from esm.sh.
  */
 import type { ProjectFile } from '../types'
 
@@ -14,10 +14,16 @@ async function getEsbuild() {
   if (!esbuildReady) {
     esbuildReady = (async () => {
       const esbuild = await import('esbuild-wasm')
-      await esbuild.initialize({
-        wasmURL: 'https://unpkg.com/esbuild-wasm@0.25.0/esbuild.wasm',
-        worker: false,
-      })
+      // initialize once; ignore "already initialized" on HMR
+      try {
+        await esbuild.initialize({
+          wasmURL: 'https://unpkg.com/esbuild-wasm@0.25.0/esbuild.wasm',
+          worker: false,
+        })
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (!/already been initialized/i.test(msg)) throw e
+      }
       return esbuild
     })()
   }
@@ -28,11 +34,31 @@ function buildFs(files: ProjectFile[]): Map<string, string> {
   const fs = new Map<string, string>()
   for (const f of files) {
     if (f.kind !== 'file') continue
-    const p = f.path.replace(/^\/+/, '')
+    const p = f.path.replace(/^\/+/, '').replace(/\\/g, '/')
     fs.set(p, f.content || '')
-    fs.set('/' + p, f.content || '')
   }
   return fs
+}
+
+function normalizePath(p: string): string {
+  const parts = p.replace(/\\/g, '/').split('/')
+  const out: string[] = []
+  for (const part of parts) {
+    if (!part || part === '.') continue
+    if (part === '..') out.pop()
+    else out.push(part)
+  }
+  return out.join('/')
+}
+
+function pickLoader(path: string): 'tsx' | 'ts' | 'jsx' | 'js' | 'css' | 'json' | 'text' {
+  if (path.endsWith('.tsx')) return 'tsx'
+  if (path.endsWith('.ts')) return 'ts'
+  if (path.endsWith('.jsx')) return 'jsx'
+  if (path.endsWith('.css')) return 'css'
+  if (path.endsWith('.json')) return 'json'
+  if (path.endsWith('.js') || path.endsWith('.mjs')) return 'js'
+  return 'text'
 }
 
 function pickEntry(fs: Map<string, string>): string | null {
@@ -42,11 +68,40 @@ function pickEntry(fs: Map<string, string>): string | null {
     'main.tsx', 'main.jsx', 'index.tsx', 'index.jsx',
   ]
   for (const c of candidates) {
-    if (fs.has(c) || fs.has('/' + c)) return c
+    if (fs.has(c)) return c
   }
-  // App.tsx only — synthesize a tiny entry
-  if (fs.has('src/App.tsx') || fs.has('/src/App.tsx') || fs.has('src/App.jsx')) {
-    return '__rahsaz_entry.tsx'
+  if (fs.has('src/App.tsx') || fs.has('src/App.jsx')) return '__rahsaz_entry.tsx'
+  return null
+}
+
+function resolveInFs(fs: Map<string, string>, request: string, importer: string): string | null {
+  const clean = request.split('?')[0].split('#')[0]
+  if (!clean) return null
+
+  const baseDir = importer.includes('/')
+    ? importer.slice(0, importer.lastIndexOf('/') + 1)
+    : ''
+
+  const joined = clean.startsWith('.')
+    ? normalizePath(baseDir + clean)
+    : normalizePath(clean.replace(/^\/+/, ''))
+
+  const tries = [
+    joined,
+    joined + '.tsx',
+    joined + '.ts',
+    joined + '.jsx',
+    joined + '.js',
+    joined + '.css',
+    joined + '.json',
+    joined + '/index.tsx',
+    joined + '/index.ts',
+    joined + '/index.jsx',
+    joined + '/index.js',
+  ]
+
+  for (const t of tries) {
+    if (fs.has(t)) return t
   }
   return null
 }
@@ -57,15 +112,15 @@ export async function buildReactPreview(files: ProjectFile[]): Promise<ReactPrev
     const fs = buildFs(files)
     let entry = pickEntry(fs)
     if (!entry) {
-      return {
-        ok: false,
-        error: 'no_entry',
-      }
+      return { ok: false, error: 'No entry file (src/main.tsx or src/App.tsx) found.' }
     }
 
     if (entry === '__rahsaz_entry.tsx') {
-      const appPath = fs.has('src/App.tsx') || fs.has('/src/App.tsx') ? './src/App.tsx' : './src/App.jsx'
-      fs.set('__rahsaz_entry.tsx', `import { createRoot } from 'react-dom/client'\nimport App from '${appPath}'\nconst el = document.getElementById('root')\nif (el) createRoot(el).render(<App />)\n`)
+      const app = fs.has('src/App.tsx') ? './src/App.tsx' : './src/App.jsx'
+      fs.set(
+        '__rahsaz_entry.tsx',
+        `import { createRoot } from 'react-dom/client'\nimport App from '${app}'\nconst el = document.getElementById('root')\nif (el) createRoot(el).render(<App />)\n`,
+      )
     }
 
     const result = await esbuild.build({
@@ -74,78 +129,68 @@ export async function buildReactPreview(files: ProjectFile[]): Promise<ReactPrev
       write: false,
       format: 'esm',
       jsx: 'automatic',
-      loader: {
-        '.tsx': 'tsx',
-        '.ts': 'ts',
-        '.jsx': 'jsx',
-        '.js': 'js',
-        '.css': 'css',
-        '.json': 'json',
-      },
+      logLevel: 'silent',
       define: {
         'process.env.NODE_ENV': '"development"',
-        'import.meta.env': '{}',
         'import.meta.env.DEV': 'true',
         'import.meta.env.PROD': 'false',
         'import.meta.env.BASE_URL': '"/"',
+        'import.meta.env.MODE': '"development"',
       },
       plugins: [
         {
           name: 'rahsaz-virtual',
           setup(build) {
-            // bare module → esm.sh
-            build.onResolve({ filter: /^[^./]/ }, args => {
-              if (args.path.startsWith('http')) return { path: args.path, external: true }
-              const url = `https://esm.sh/${args.path}`
-              return { path: url, external: true }
-            })
-
+            // Entry point must always load from virtual FS (never external)
             build.onResolve({ filter: /.*/ }, args => {
-              if (args.path.startsWith('http')) return { path: args.path, external: true }
-              if (args.path.startsWith('data:')) return { path: args.path, external: true }
-
-              let rel = args.path
-              if (rel.startsWith('/')) {
-                const key = rel.replace(/^\/+/, '')
-                if (fs.has(key) || fs.has(rel)) return { path: key, namespace: 'virtual' }
+              if (args.kind === 'entry-point') {
+                const key = args.path.replace(/^\/+/, '')
+                if (fs.has(key)) return { path: key, namespace: 'virtual' }
+                return { path: key, namespace: 'virtual' }
               }
 
-              const importer = (args.importer || '').replace(/^\//, '')
-              const baseDir = importer.includes('/')
-                ? importer.slice(0, importer.lastIndexOf('/') + 1)
-                : ''
+              const req = args.path
 
-              // try resolve with extensions
-              const tryPaths: string[] = []
-              const joined = rel.startsWith('.')
-                ? normalizePath(baseDir + rel)
-                : normalizePath(rel.replace(/^\//, ''))
-
-              tryPaths.push(joined)
-              for (const ext of ['.tsx', '.ts', '.jsx', '.js', '.css', '.json', '/index.tsx', '/index.ts', '/index.jsx', '/index.js']) {
-                tryPaths.push(joined + ext)
+              // Already a URL
+              if (/^https?:\/\//.test(req) || req.startsWith('data:')) {
+                return { path: req, external: true }
               }
 
-              for (const p of tryPaths) {
-                if (fs.has(p) || fs.has('/' + p)) {
-                  return { path: p.replace(/^\//, ''), namespace: 'virtual' }
+              // Relative / absolute project paths
+              if (req.startsWith('.') || req.startsWith('/')) {
+                const importer = (args.importer || '').replace(/^virtual:/, '').replace(/^\/+/, '')
+                const resolved = resolveInFs(fs, req, importer)
+                if (resolved) return { path: resolved, namespace: 'virtual' }
+                // missing relative file
+                if (req.endsWith('.css')) {
+                  return { path: req, namespace: 'virtual-empty-css' }
+                }
+                return {
+                  path: req,
+                  namespace: 'virtual',
+                  pluginData: { missing: true },
                 }
               }
 
-              // CSS side-effect empty
-              if (rel.endsWith('.css')) {
-                return { path: rel, namespace: 'virtual-empty-css' }
+              // Bare package import → CDN
+              return {
+                path: `https://esm.sh/${req}`,
+                external: true,
               }
-
-              return { path: `https://esm.sh/${args.path}`, external: true }
             })
 
             build.onLoad({ filter: /.*/, namespace: 'virtual' }, args => {
-              const key = args.path.replace(/^\//, '')
-              const text = fs.get(key) ?? fs.get('/' + key)
-              if (text === undefined) return { errors: [{ text: `Missing file: ${key}` }] }
-              const loader = pickLoader(key)
-              return { contents: text, loader }
+              if (args.pluginData?.missing) {
+                return {
+                  errors: [{ text: `Missing virtual file: ${args.path}` }],
+                }
+              }
+              const key = args.path.replace(/^\/+/, '')
+              const text = fs.get(key)
+              if (text === undefined) {
+                return { errors: [{ text: `Missing file: ${key}` }] }
+              }
+              return { contents: text, loader: pickLoader(key) }
             })
 
             build.onLoad({ filter: /.*/, namespace: 'virtual-empty-css' }, () => ({
@@ -162,7 +207,10 @@ export async function buildReactPreview(files: ProjectFile[]): Promise<ReactPrev
     }
 
     const code = result.outputFiles?.[0]?.text
-    if (!code) return { ok: false, error: 'empty_bundle' }
+    if (!code) return { ok: false, error: 'Empty bundle output.' }
+
+    // Avoid breaking out of script tag
+    const safeCode = code.replace(/<\/script/gi, '<\\/script')
 
     const html = `<!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -171,26 +219,25 @@ export async function buildReactPreview(files: ProjectFile[]): Promise<ReactPrev
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Rahsaz React Preview</title>
 <style>
-  html,body,#root{margin:0;padding:0;min-height:100%}
-  body{font-family:system-ui,sans-serif}
-  .rahsaz-boot-error{padding:16px;color:#b91c1c;white-space:pre-wrap;font:12px/1.5 ui-monospace,monospace}
+html,body,#root{margin:0;padding:0;min-height:100%}
+body{font-family:system-ui,sans-serif;background:#0b1020;color:#e5e7eb}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="module">
-${code.replace(/<\/script/gi, '<\\/script')}
+${safeCode}
 </script>
 <script>
-window.addEventListener('error', function(e){
+window.addEventListener('error', function (e) {
   try {
-    parent.postMessage({ source: 'rahsaz-preview', type: 'error', message: String(e.message || e.error || 'error') }, '*')
-  } catch(err) {}
+    parent.postMessage({ source: 'rahsaz-preview', type: 'error', message: String(e.message || e.error || 'error') }, '*');
+  } catch (err) {}
 });
-window.addEventListener('unhandledrejection', function(e){
+window.addEventListener('unhandledrejection', function (e) {
   try {
-    parent.postMessage({ source: 'rahsaz-preview', type: 'error', message: String(e.reason || 'rejection') }, '*')
-  } catch(err) {}
+    parent.postMessage({ source: 'rahsaz-preview', type: 'error', message: String(e.reason || 'rejection') }, '*');
+  } catch (err) {}
 });
 </script>
 </body>
@@ -200,24 +247,4 @@ window.addEventListener('unhandledrejection', function(e){
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
-}
-
-function normalizePath(p: string): string {
-  const parts = p.replace(/\\/g, '/').split('/')
-  const out: string[] = []
-  for (const part of parts) {
-    if (!part || part === '.') continue
-    if (part === '..') out.pop()
-    else out.push(part)
-  }
-  return out.join('/')
-}
-
-function pickLoader(path: string): 'tsx' | 'ts' | 'jsx' | 'js' | 'css' | 'json' {
-  if (path.endsWith('.tsx')) return 'tsx'
-  if (path.endsWith('.ts')) return 'ts'
-  if (path.endsWith('.jsx')) return 'jsx'
-  if (path.endsWith('.css')) return 'css'
-  if (path.endsWith('.json')) return 'json'
-  return 'js'
 }
