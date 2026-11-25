@@ -1421,7 +1421,7 @@ Created with Rahsaz.
                     {t.seedStarter}
                   </button>
                   <button type="button" className="secondary-button" onClick={handleControlDocs} title={isFa ? 'ساخت docs/spec.txt، decisions.txt و status.txt از اطلاعات پروژه' : 'Create docs/spec.txt, decisions.txt and status.txt from project data'}>
-                    <FileText, Network size={16} />{isFa ? 'دفتر کنترل پروژه' : 'Project control log'}
+                    <FileText size={16} />{isFa ? 'دفتر کنترل پروژه' : 'Project control log'}
                   </button>
                 </div>
                 {fileError && <div className="form-error" style={{ marginBottom: 12 }}>{fileError}</div>}
