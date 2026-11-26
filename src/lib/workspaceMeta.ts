@@ -1,7 +1,7 @@
 /**
  * Workspace helpers: prompts, next-step coach, tab help, QA keys.
  */
-import type { Project } from '../types'
+import type { Project } from '../shared/types'
 import type { TranslationKeys } from '../data/translations'
 
 export type WorkspaceTab =

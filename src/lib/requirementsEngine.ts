@@ -1,5 +1,5 @@
-import type { DiscoveryData, Project, ProjectType, RequirementItem, RequirementsData } from '../types'
-import { uid } from '../uid'
+import type { DiscoveryData, Project, ProjectType, RequirementItem, RequirementsData } from '../shared/types'
+import { uid } from '../core/uid'
 
 function ans(d: DiscoveryData | undefined, id: string): string {
   return (d?.answers || []).find(a => a.questionId === id)?.value?.trim() || ''
@@ -194,10 +194,10 @@ export function requirementsToMarkdown(project: Project, req: RequirementsData, 
   lines.push('')
   lines.push(req.summary)
   lines.push('')
-  const groups: RequirementItem['kind'][] = ['functional', 'non_functional', 'constraint', 'open_question']
+  const groups: RequirementItem['kind'][] = ['functional', 'non_functional', 'constraint', 'security', 'open_question']
   const labels: Record<RequirementItem['kind'], string> = isFa
-    ? { functional: 'عملکردی', non_functional: 'غیرفعالکردی', constraint: 'محدودیت', open_question: 'سؤال باز' }
-    : { functional: 'Functional', non_functional: 'Non-functional', constraint: 'Constraints', open_question: 'Open questions' }
+    ? { functional: 'عملکردی', non_functional: 'غیرفعالکردی', constraint: 'محدودیت', security: 'امنیتی', open_question: 'سؤال باز' }
+    : { functional: 'Functional', non_functional: 'Non-functional', constraint: 'Constraints', security: 'Security', open_question: 'Open questions' }
   for (const g of groups) {
     const list = req.items.filter(i => i.kind === g)
     if (!list.length) continue

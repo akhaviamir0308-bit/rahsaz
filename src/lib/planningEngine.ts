@@ -1,5 +1,5 @@
-import type { ArchitectureData, Project, RequirementsData, Task } from '../types'
-import { uid } from '../uid'
+import type { ArchitectureData, Project, RequirementsData, Task } from '../shared/types'
+import { uid } from '../core/uid'
 
 /**
  * Generate an actionable task list from requirements + architecture.

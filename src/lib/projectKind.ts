@@ -1,4 +1,4 @@
-import type { ProjectFile } from '../types'
+import type { ProjectFile } from '../shared/types'
 
 export type ProjectKind = 'empty' | 'static' | 'react_vite' | 'mixed'
 

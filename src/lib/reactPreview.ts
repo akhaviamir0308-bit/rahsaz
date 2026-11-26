@@ -2,7 +2,7 @@
  * In-browser React/Vite-style preview using esbuild-wasm.
  * Bundles the virtual file tree; bare imports load from esm.sh.
  */
-import type { ProjectFile } from '../types'
+import type { ProjectFile } from '../shared/types'
 
 export type ReactPreviewResult =
   | { ok: true; html: string }

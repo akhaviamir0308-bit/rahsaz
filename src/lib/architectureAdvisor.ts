@@ -1,4 +1,4 @@
-import type { ArchitectureData, Project, ProjectType } from '../types'
+import type { ArchitectureData, Project, ProjectType } from '../shared/types'
 
 function typeApproach(t: ProjectType): ArchitectureData['approach'] {
   switch (t) {
