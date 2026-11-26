@@ -1,6 +1,6 @@
-# Rahsaz v0.17.0 (Package D)
+# Rahsaz v0.18.0 (Package E)
 
-Phases 9–12 improvements. Keep src/lib and src/modules in sync for GH uploads.
+Phases 13–16: testing, quality, security signals, publish guide.
 
 ```bash
 npm install && npm run build

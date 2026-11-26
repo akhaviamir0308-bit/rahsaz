@@ -29,6 +29,9 @@ import { suggestArchitecture, architectureToMarkdown } from './modules/architect
 import { buildPlanTasks } from './modules/planning/planningEngine'
 import { importZipFiles } from './modules/file-manager/zipImport'
 import { parseAiProposedFiles } from './modules/ai-center/parseAiFiles'
+import { runProjectTests } from './modules/testing/runTests'
+import { buildQualityReport } from './modules/quality/qualityReport'
+import { buildPublishGuide } from './modules/publishing/publishGuide'
 import {
   createProject as storageCreate,
   deleteProject as storageDelete, updateProject as storageUpdate, storageInfo,
@@ -610,49 +613,9 @@ Created with Rahsaz.
 
 
   const runFileTests = useCallback((): TestReport => {
-    const files = getFiles().filter(f => f.kind === 'file')
-    const checks: TestCheck[] = []
-    const hasIndex = files.some(f => f.path === 'index.html' || f.path.endsWith('/index.html'))
-    checks.push({
-      id: 'hasIndex',
-      labelKey: 'tc_hasIndex',
-      ok: hasIndex,
-      detail: hasIndex ? 'tc_hasIndex_ok' : 'tc_hasIndex_fail',
-    })
-    const emptyFiles = files.filter(f => (f.content || '').trim() === '')
-    checks.push({
-      id: 'notEmpty',
-      labelKey: 'tc_notEmpty',
-      ok: emptyFiles.length === 0,
-      detail: emptyFiles.length === 0 ? 'tc_notEmpty_ok' : 'tc_notEmpty_fail',
-    })
-    const hasCss = files.some(f => f.path.endsWith('.css'))
-    checks.push({
-      id: 'hasCss',
-      labelKey: 'tc_hasCss',
-      ok: hasCss,
-      detail: hasCss ? 'tc_hasCss_ok' : 'tc_hasCss_fail',
-    })
-    const pages = listPages(getFiles())
-    if (pages.length > 0) {
-      const all = getFiles()
-      const missing = [...new Set(pages.flatMap(pg => findBrokenRefs(all, pg)))]
-      const critical = missing.filter(r => !/\.(png|jpe?g|gif|webp|avif|ico|svg|woff2?|ttf|otf|mp4|webm|mp3|pdf)$/i.test(r.replace(/[?#].*$/, '')))
-      checks.push({
-        id: 'brokenRefs',
-        labelKey: 'tc_brokenRefs',
-        ok: critical.length === 0,
-        detail: critical.length === 0 ? 'tc_brokenRefs_ok' : critical.slice(0, 5).join(', '),
-      })
-    }
-    checks.push({
-      id: 'fileCount',
-      labelKey: 'tc_fileCount',
-      ok: files.length > 0,
-      detail: String(files.length),
-    })
-    return { checks, ranAt: new Date().toISOString() }
-  }, [getFiles])
+    if (!activeProject) return { checks: [], ranAt: new Date().toISOString() }
+    return runProjectTests(activeProject, getFiles())
+  }, [activeProject, getFiles])
 
   const handleRunTests = useCallback(() => {
     if (!activeProject) return
@@ -1826,6 +1789,39 @@ Created with Rahsaz.
                   </div>
                   {saveMessage && <span className="save-toast">{saveMessage}</span>}
                 </div>
+                {(() => {
+                  const qaDone = QA_KEYS.filter(k => qaChecks[k]).length
+                  const qr = buildQualityReport(activeProject, activeProject.testReport, qaDone, QA_KEYS.length)
+                  const guide = buildPublishGuide(activeProject)
+                  return (
+                    <div className="ai-block" style={{ marginBottom: 16 }}>
+                      <h3 className="ai-block-title">{isFa ? 'گزارش کیفیت' : 'Quality report'}</h3>
+                      <p><strong>{qr.score}/100</strong> — {isFa ? qr.levelLabelFa : qr.levelLabelEn}</p>
+                      {qr.publishBlocked && (
+                        <p className="ai-warn" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <AlertTriangle size={16} />
+                          {isFa ? 'انتشار توصیه نمی‌شود تا موارد بحرانی رفع شوند.' : 'Publishing is not recommended until critical issues are fixed.'}
+                        </p>
+                      )}
+                      {qr.critical.length > 0 && (
+                        <p className="ai-hint">{isFa ? 'بحرانی: ' : 'Critical: '}{qr.critical.join(', ')}</p>
+                      )}
+                      <h3 className="ai-block-title" style={{ marginTop: 16 }}>{isFa ? 'راهنمای انتشار' : 'Publish guide'} ({guide.projectKind})</h3>
+                      {guide.platforms.map(p => (
+                        <div key={p.id} style={{ marginBottom: 12 }}>
+                          <strong>{isFa ? p.titleFa : p.titleEn}</strong>
+                          <ol style={{ margin: '6px 0', paddingInlineStart: 22, lineHeight: 1.7 }}>
+                            {(isFa ? p.stepsFa : p.stepsEn).map((s, i) => <li key={i}>{s}</li>)}
+                          </ol>
+                        </div>
+                      ))}
+                      <ul style={{ paddingInlineStart: 22 }}>
+                        {(isFa ? guide.notesFa : guide.notesEn).map((n, i) => <li key={i}>{n}</li>)}
+                      </ul>
+                    </div>
+                  )
+                })()}
+
 
                 {(() => {
                   const files = getFiles().filter(f => f.kind === 'file')
