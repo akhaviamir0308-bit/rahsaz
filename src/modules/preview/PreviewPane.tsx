@@ -188,7 +188,7 @@ export default function PreviewPane({ files, dirty, isFa, resetKey }: {
                   ref={frameRef}
                   key={`react-${nonce}`}
                   title="react-preview"
-                  sandbox="allow-scripts allow-popups allow-same-origin"
+                  sandbox="allow-scripts allow-popups"
                   srcDoc={reactHtml}
                   style={{ width: size.w, height: size.h, border: 0, transform: `scale(${scale})`, transformOrigin: 'top left', background: '#fff', display: 'block' }}
                 />

@@ -1,8 +1,7 @@
-# Rahsaz v0.16.0 — Package C
+# Rahsaz v0.17.0 (Package D)
 
-Phases 5–8: Discovery analysis, Requirements, Architecture, Planning engines.
+Phases 9–12 improvements. Keep src/lib and src/modules in sync for GH uploads.
 
 ```bash
-npm install
-npm run build
+npm install && npm run build
 ```

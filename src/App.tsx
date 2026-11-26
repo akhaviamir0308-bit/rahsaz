@@ -28,6 +28,7 @@ import { buildRequirements, requirementsToMarkdown } from './modules/requirement
 import { suggestArchitecture, architectureToMarkdown } from './modules/architecture/architectureAdvisor'
 import { buildPlanTasks } from './modules/planning/planningEngine'
 import { importZipFiles } from './modules/file-manager/zipImport'
+import { parseAiProposedFiles } from './modules/ai-center/parseAiFiles'
 import {
   createProject as storageCreate,
   deleteProject as storageDelete, updateProject as storageUpdate, storageInfo,
@@ -102,6 +103,7 @@ export default function App() {
   // Files
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
   const [currentFolder, setCurrentFolder] = useState('')
+  const [fileSearch, setFileSearch] = useState('')
   const [editorContent, setEditorContent] = useState('')
   const [editorDirty, setEditorDirty] = useState(false)
   const [newPath, setNewPath] = useState('')
@@ -341,11 +343,16 @@ export default function App() {
 
   const handleSaveResponse = useCallback(() => {
     if (!activeProject || !pasteText.trim()) return
+    const content = pasteText.trim()
+    const proposed = parseAiProposedFiles(content)
     const msg: AiMessage = {
       id: uid(),
       role: 'assistant',
-      content: pasteText.trim(),
+      content,
       createdAt: new Date().toISOString(),
+      reviewed: false,
+      applied: false,
+      label: proposed.length ? `${proposed.length} file(s)` : undefined,
     }
     const messages = [...(activeProject.ai?.messages || []), msg]
     const ai: AiData = { messages, updatedAt: new Date().toISOString() }
@@ -353,10 +360,14 @@ export default function App() {
     if (result.ok) {
       setProjects(result.data)
       setPasteText('')
-      setSaveMessage(t.responseSaved)
+      setSaveMessage(
+        proposed.length
+          ? (isFa ? `پاسخ ذخیره شد — ${proposed.length} فایل پیشنهادی` : `Saved — ${proposed.length} proposed file(s)`)
+          : t.responseSaved,
+      )
       setTimeout(() => setSaveMessage(''), 2500)
     } else setStorageError(result.error)
-  }, [activeProject, pasteText, projects, t])
+  }, [activeProject, pasteText, projects, t, isFa])
 
   const handleDeleteMessage = useCallback((msgId: string) => {
     if (!activeProject) return
@@ -389,6 +400,56 @@ export default function App() {
     setStorageError(result.error)
     return false
   }, [activeProject, projects])
+
+
+  const handleApplyAiMessageFiles = useCallback((msgId: string) => {
+    if (!activeProject) return
+    const msg = (activeProject.ai?.messages || []).find(m => m.id === msgId)
+    if (!msg) return
+    const proposed = parseAiProposedFiles(msg.content)
+    if (!proposed.length) {
+      setSaveMessage(isFa ? 'فایل قابل استخراج در پاسخ نیست' : 'No extractable files in response')
+      setTimeout(() => setSaveMessage(''), 2500)
+      return
+    }
+    if (!window.confirm(isFa
+      ? `${proposed.length} فایل از پاسخ AI اعمال شود؟ مسیرهای هم‌نام جایگزین می‌شوند.`
+      : `Apply ${proposed.length} file(s) from AI response? Same paths will be overwritten.`)) return
+    const now = new Date().toISOString()
+    const byPath = new Map(getFiles().map(f => [f.path, f]))
+    for (const item of proposed) {
+      const path = normalizePath(item.path)
+      if (!path || path.includes('..')) continue
+      const segs = path.split('/')
+      for (let i = 0; i < segs.length - 1; i++) {
+        const folderPath = segs.slice(0, i + 1).join('/')
+        if (!byPath.has(folderPath)) {
+          byPath.set(folderPath, { id: uid(), path: folderPath, kind: 'folder' as const, updatedAt: now })
+        }
+      }
+      const prev = byPath.get(path)
+      byPath.set(path, {
+        id: prev?.id || uid(),
+        path,
+        kind: 'file',
+        content: item.content,
+        updatedAt: now,
+        size: item.content.length,
+      })
+    }
+    const next = Array.from(byPath.values()).sort((a, b) => a.path.localeCompare(b.path))
+    persistFiles(next)
+    const messages = (activeProject.ai?.messages || []).map(m =>
+      m.id === msgId ? { ...m, applied: true, reviewed: true } : m,
+    )
+    const ai: AiData = { messages, updatedAt: now }
+    const result = storageUpdate(activeProject.id, { ai }, projects)
+    if (result.ok) {
+      setProjects(result.data)
+      setSaveMessage(isFa ? 'فایل‌های AI اعمال شد' : 'AI files applied')
+      setTimeout(() => setSaveMessage(''), 2500)
+    } else setStorageError(result.error)
+  }, [activeProject, getFiles, persistFiles, projects, isFa])
 
   const normalizePath = (raw: string) =>
     raw.trim().replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/')
@@ -1460,6 +1521,16 @@ Created with Rahsaz.
                               {msg.role === 'user' ? t.aiPromptLabel : t.aiResultLabel}
                               {msg.label ? ` · ${msg.label}` : ''}
                             </span>
+                            {msg.role === 'assistant' && (
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                style={{ fontSize: 12, padding: '2px 8px' }}
+                                onClick={() => handleApplyAiMessageFiles(msg.id)}
+                              >
+                                {isFa ? 'اعمال فایل‌ها' : 'Apply files'}
+                              </button>
+                            )}
                             <button type="button" className="delete-button" onClick={() => handleDeleteMessage(msg.id)} title={t.deleteMessage}>
                               <Trash2 size={14} />
                             </button>
@@ -1497,6 +1568,14 @@ Created with Rahsaz.
                   <span className="ai-hint">{t.selectFolderHint}</span>
                 </div>
                 <div className="files-toolbar">
+                  <input
+                    type="search"
+                    value={fileSearch}
+                    onChange={e => setFileSearch(e.target.value)}
+                    placeholder={isFa ? 'جست‌وجوی فایل…' : 'Search files…'}
+                    className="files-path-input"
+                    style={{ maxWidth: 180 }}
+                  />
                   <input
                     type="text"
                     value={newPath}
@@ -1539,7 +1618,7 @@ Created with Rahsaz.
                       </div>
                     ) : (
                       <ul className="file-list">
-                        {getFiles().map(f => (
+                        {getFiles().filter(f => !fileSearch.trim() || f.path.toLowerCase().includes(fileSearch.trim().toLowerCase())).map(f => (
                           <li key={f.id} className={`file-row ${selectedFileId === f.id ? 'active' : ''} ${f.kind === 'folder' && currentFolder === f.path ? 'active' : ''}`}>
                             <button
                               type="button"
