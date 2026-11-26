@@ -1257,9 +1257,10 @@ Created with Rahsaz.
                     <div className="req-summary" style={{ marginTop: 16 }}>
                       {activeProject.requirements.items.map(item => (
                         <div key={item.id} className="req-item">
-                          <strong>{item.title}</strong>
+                          <strong>{item.code ? `${item.code} — ` : ''}{item.title}</strong>
                           <p>{item.description}</p>
-                          <small>{item.kind} · P{item.priority}</small>
+                          {item.acceptanceCriteria && <p className="ai-hint">{item.acceptanceCriteria}</p>}
+                          <small>{item.kind} · P{item.priority}{item.status ? ` · ${item.status}` : ''}</small>
                         </div>
                       ))}
                     </div>
@@ -1296,8 +1297,25 @@ Created with Rahsaz.
                     <p>{activeProject.architecture.rationale}</p>
                     <h3 className="ai-block-title">{t.archStack}</h3>
                     <ul>{activeProject.architecture.stack.map(s => <li key={s}>{s}</li>)}</ul>
+                    <p className="ai-hint">
+                      Backend: {activeProject.architecture.needsBackend ? '✓' : '—'}
+                      {' · '}Auth: {activeProject.architecture.needsAuth ? '✓' : '—'}
+                      {' · '}DB: {activeProject.architecture.needsDatabase ? '✓' : '—'}
+                    </p>
                     <h3 className="ai-block-title">{t.archPages}</h3>
                     <ul>{activeProject.architecture.pages.map(s => <li key={s}>{s}</li>)}</ul>
+                    {!!activeProject.architecture.risks?.length && (
+                      <>
+                        <h3 className="ai-block-title">{isFa ? 'ریسک‌ها' : 'Risks'}</h3>
+                        <ul>{activeProject.architecture.risks.map(s => <li key={s}>{s}</li>)}</ul>
+                      </>
+                    )}
+                    {!!activeProject.architecture.deployHints?.length && (
+                      <>
+                        <h3 className="ai-block-title">{isFa ? 'استقرار' : 'Deploy'}</h3>
+                        <ul>{activeProject.architecture.deployHints.map(s => <li key={s}>{s}</li>)}</ul>
+                      </>
+                    )}
                   </div>
                 )}
               </section>

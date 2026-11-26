@@ -1,12 +1,8 @@
-# Rahsaz — v0.15.0 (Package B)
+# Rahsaz v0.16.0 — Package C
 
-Phase 3–4: data model schema v15 + IndexedDB dual persistence.
-
-See `docs/PACKAGE_B.md`.
+Phases 5–8: Discovery analysis, Requirements, Architecture, Planning engines.
 
 ```bash
 npm install
 npm run build
 ```
-
-If GitHub still has src/lib from older uploads, this zip includes fixed shims under src/lib so build succeeds. Prefer modules/ paths going forward.
