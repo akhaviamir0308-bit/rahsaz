@@ -1,10 +1,11 @@
-# Rahsaz v0.19.0 — Package F
+# Rahsaz v0.20.0
 
-Phases 17–20: UX path, project report, integration release.
+Package 1 of the new requirements doc: audit 0.19.0 + architecture cleanup.
+
+- `src/lib` → re-exports from `modules`
+- Shared UI: ProductPathBanner, ProjectStatusCard
 
 ```bash
 npm install
 npm run build
 ```
-
-See `docs/STABLE_CHECKLIST.md`.
