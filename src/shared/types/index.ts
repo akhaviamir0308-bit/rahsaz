@@ -163,7 +163,15 @@ export interface ActivityEntry {
 }
 
 /** Publish metadata stub for later phases */
+export interface DesignData {
+  pages: string[]
+  notes: string
+  confirmed: boolean
+  updatedAt: string
+}
+
 export interface PublishData {
+
   status: 'not_ready' | 'ready' | 'published'
   target?: string
   lastPublishedAt?: string
@@ -194,6 +202,7 @@ export interface Project {
   versions?: VersionsData
   activity?: ActivityEntry[]
   publish?: PublishData
+  design?: DesignData
 }
 
 export type StorageResult<T> =

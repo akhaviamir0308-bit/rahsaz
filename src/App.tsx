@@ -34,6 +34,7 @@ import { buildQualityReport } from './modules/quality/qualityReport'
 import { buildPublishGuide } from './modules/publishing/publishGuide'
 import ProjectStatusCard from './shared/components/ProjectStatusCard'
 import ProductPathBanner from './shared/components/ProductPathBanner'
+import { evaluateGuidance } from './modules/guidance/guidanceEngine'
 import {
   createProject as storageCreate,
   deleteProject as storageDelete, updateProject as storageUpdate, storageInfo,
@@ -417,9 +418,23 @@ export default function App() {
       return
     }
     if (!window.confirm(isFa
-      ? `${proposed.length} فایل از پاسخ AI اعمال شود؟ مسیرهای هم‌نام جایگزین می‌شوند.`
-      : `Apply ${proposed.length} file(s) from AI response? Same paths will be overwritten.`)) return
+      ? `${proposed.length} فایل از پاسخ AI اعمال شود؟ مسیرهای هم‌نام جایگزین می‌شوند. قبلش snapshot گرفته می‌شود.`
+      : `Apply ${proposed.length} file(s) from AI response? Same paths will be overwritten. A snapshot is taken first.`)) return
     const now = new Date().toISOString()
+    {
+      const snapFiles = getFiles().map(f => ({ ...f }))
+      const snap = {
+        id: uid(),
+        label: isFa ? 'قبل از اعمال AI' : 'Before AI apply',
+        note: msgId,
+        createdAt: now,
+        files: snapFiles,
+        stage: activeProject.stage,
+      }
+      const prev = activeProject.versions?.snapshots || []
+      const versions = { snapshots: [snap, ...prev].slice(0, 20), updatedAt: now }
+      storageUpdate(activeProject.id, { versions }, projects)
+    }
     const byPath = new Map(getFiles().map(f => [f.path, f]))
     for (const item of proposed) {
       const path = normalizePath(item.path)
@@ -993,6 +1008,7 @@ Created with Rahsaz.
               { id: 'discovery' as const, label: t.projectDiscovery, icon: ClipboardList },
               { id: 'requirements' as const, label: t.projectRequirements, icon: FileText },
               { id: 'architecture' as const, label: t.projectArchitecture, icon: Network },
+              { id: 'design' as const, label: isFa ? 'طراحی' : 'Design', icon: Layers3 },
               { id: 'ai' as const, label: t.projectAi, icon: Bot },
               { id: 'files' as const, label: t.projectFiles, icon: FileCode2 },
               { id: 'preview' as const, label: t.projectPreview, icon: Eye },
@@ -1035,6 +1051,7 @@ Created with Rahsaz.
                   : workspaceTab === 'discovery' ? t.projectDiscovery
                   : workspaceTab === 'requirements' ? t.projectRequirements
                   : workspaceTab === 'architecture' ? t.projectArchitecture
+                  : workspaceTab === 'design' ? (isFa ? 'طراحی' : 'Design')
                   : workspaceTab === 'ai' ? t.projectAi
                   : workspaceTab === 'files' ? t.projectFiles
                   : workspaceTab === 'preview' ? t.projectPreview
@@ -1117,6 +1134,29 @@ Created with Rahsaz.
                     setTimeout(() => setSaveMessage(''), 2000)
                   }}
                 />
+
+                {(() => {
+                  const qaDone = QA_KEYS.filter(k => qaChecks[k]).length
+                  const g = evaluateGuidance(activeProject, qaDone, QA_KEYS.length)
+                  return (
+                    <div className="ai-block" style={{ marginTop: 16 }}>
+                      <h3 className="ai-block-title">{isFa ? 'موتور راهبری پروژه (آزمایشی)' : 'Project guidance engine (experimental)'}</h3>
+                      <p><strong>{g.progressPct}%</strong> — {isFa ? g.nextActionFa : g.nextActionEn}</p>
+                      <button type="button" className="primary-button" style={{ marginTop: 8 }} onClick={() => setWorkspaceTab(g.nextTab as typeof workspaceTab)}>
+                        {isFa ? 'برو به اقدام بعدی' : 'Go to next action'}
+                      </button>
+                      <div className="qa-list" style={{ marginTop: 12 }}>
+                        {g.stages.map(s => (
+                          <div key={s.id} className={'qa-item ' + (s.status === 'completed' ? 'done' : '')}>
+                            <span>{s.status === 'completed' ? 'OK' : s.status === 'locked' ? '—' : '!'}</span>
+                            <span>{isFa ? s.titleFa : s.titleEn}</span>
+                            <small>{isFa ? s.reasonsFa[0] : s.reasonsEn[0]} · {s.status}</small>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
                     <small>{doneCount} / {tasks.length} {t.tasksCompleted}</small>
                   </div>
                 </div>
