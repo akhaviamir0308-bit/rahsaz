@@ -32,6 +32,8 @@ import { parseAiProposedFiles } from './modules/ai-center/parseAiFiles'
 import { runProjectTests } from './modules/testing/runTests'
 import { buildQualityReport } from './modules/quality/qualityReport'
 import { buildPublishGuide } from './modules/publishing/publishGuide'
+import { buildProjectStatusReport, projectReportToMarkdown } from './modules/reports/projectReport'
+import { pickNextTask } from './modules/planning/planningEngine'
 import {
   createProject as storageCreate,
   deleteProject as storageDelete, updateProject as storageUpdate, storageInfo,
@@ -1105,6 +1107,25 @@ Created with Rahsaz.
                   <div className="stat-card">
                     <span>{t.progress}</span>
                     <strong style={{ fontSize: 16 }}>{progressPct}%</strong>
+
+                {(() => {
+                  const qaDone = QA_KEYS.filter(k => qaChecks[k]).length
+                  const report = buildProjectStatusReport(activeProject, qaDone, QA_KEYS.length, isFa)
+                  return (
+                    <div className="ai-block" style={{ marginTop: 16 }}>
+                      <h3 className="ai-block-title">{isFa ? 'گزارش وضعیت پروژه' : 'Project status report'}</h3>
+                      <p><strong>{report.quality.score}/100</strong> — {isFa ? report.quality.levelLabelFa : report.quality.levelLabelEn}</p>
+                      <p className="ai-hint">{isFa ? 'فایل' : 'Files'}: {report.filesCount} · {isFa ? 'تست' : 'Tests'}: {report.testPass}/{report.testTotal} · {isFa ? 'نسخه' : 'Snapshots'}: {report.snapshotsCount}</p>
+                      {report.nextTaskTitle && <p className="ai-hint">{isFa ? 'اقدام بعدی: ' : 'Next: '}<strong>{report.nextTaskTitle}</strong></p>}
+                      {report.warnings.slice(0, 4).map((w, i) => <p key={i} className="ai-hint">• {w}</p>)}
+                      <button type="button" className="secondary-button" style={{ marginTop: 8 }} onClick={() => {
+                        void navigator.clipboard.writeText(projectReportToMarkdown(report, isFa))
+                        setSaveMessage(isFa ? 'گزارش کپی شد' : 'Report copied')
+                        setTimeout(() => setSaveMessage(''), 2000)
+                      }}>{isFa ? 'کپی گزارش' : 'Copy report'}</button>
+                    </div>
+                  )
+                })()}
                     <small>{doneCount} / {tasks.length} {t.tasksCompleted}</small>
                   </div>
                 </div>
@@ -1907,6 +1928,18 @@ Created with Rahsaz.
                     <p style={{ color: 'var(--muted)' }}>{doneCount} / {tasks.length} {t.tasksCompleted}</p>
                   </div>
                 </div>
+
+                {(() => {
+                  const next = pickNextTask(tasks)
+                  if (!next) return null
+                  return (
+                    <div className="ai-block" style={{ marginBottom: 12 }}>
+                      <h3 className="ai-block-title">{isFa ? 'پیشنهاد اقدام بعدی' : 'Suggested next action'}</h3>
+                      <p style={{ margin: 0 }}>{next.title}</p>
+                      {next.description && <p className="ai-hint">{next.description}</p>}
+                    </div>
+                  )
+                })()}
                 <div className="task-add-row">
                   <input
                     type="text"
@@ -2069,6 +2102,15 @@ Created with Rahsaz.
           {activePage === 'overview' && (
             <>
               <section className="hero">
+              <div className="ai-block" style={{ marginBottom: 16 }}>
+                <h3 className="ai-block-title">{isFa ? 'مسیر محصول راه‌ساز' : 'Rahsaz product path'}</h3>
+                <p className="ai-hint" style={{ margin: 0 }}>
+                  {isFa
+                    ? 'ایده → نیازسنجی → نیازمندی → معماری → برنامه → ساخت فایل → پیش‌نمایش → تست/کیفیت → انتشار'
+                    : 'Idea → Discovery → Requirements → Architecture → Plan → Files → Preview → Test/QA → Publish'}
+                </p>
+              </div>
+
                 <div className="hero-copy">
                   <div className="eyebrow"><Sparkles size={15} />{isFa ? 'فضای ساخت وب‌سایت با هوش مصنوعی' : 'AI-ASSISTED WEBSITE WORKSPACE'}</div>
                   <h1>{t.welcome}</h1>
