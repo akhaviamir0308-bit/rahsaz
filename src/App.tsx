@@ -10,7 +10,7 @@ import {
 import type {
   Language, Project, ProjectType, ProjectStage, ProjectStatus,
   Theme, Task, DiscoveryData, DiscoveryAnswer, AiData, AiMessage, FilesData, ProjectFile, QaData,
-  TestReport, TestCheck, VersionsData, VersionSnapshot
+  TestReport, VersionsData, VersionSnapshot
 } from './types'
 import {
   getTranslations, type TranslationKeys, DISCOVERY_QUESTIONS, PROMPT_TEMPLATES
@@ -40,7 +40,6 @@ import {
 import { buildZip, downloadBlob } from './zip'
 import { uid, lsGet, lsSet } from './uid'
 import PreviewPane from './modules/preview/PreviewPane'
-import { findBrokenRefs, listPages } from './preview'
 import LearnView from './modules/academy/LearnView'
 import { ProjectCard } from './modules/projects/ProjectCard'
 import type { ActionId } from './data/learn'
