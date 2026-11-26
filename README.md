@@ -1,13 +1,8 @@
-# Rahsaz — v0.14.0 (Package A)
+# Rahsaz — v0.15.0 (Package B)
 
-## Phase 1 — Audit
-See `docs/AUDIT_v0.13.2.md`.
+Phase 3–4: data model schema v15 + IndexedDB dual persistence.
 
-## Phase 2 — Architecture (started)
-- `src/core/` storage, zip, uid
-- `src/modules/` domain modules
-- `src/shared/types`, `shared/hooks/useProjects`
-- Compatibility shims kept at old paths
+See `docs/PACKAGE_B.md`.
 
 ```bash
 npm install

@@ -1,28 +1,37 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Language, Project, ProjectType } from '../types'
 import {
-  loadProjects,
   createProject as storageCreate,
   deleteProject as storageDelete,
   updateProject as storageUpdate,
+  hydrateProjectsPreferred,
+  saveProjects,
 } from '../../core/storage/storage'
 
-/** Project list + persistence — keeps storage out of pure UI. */
+/** Project list + persistence (LS cache + IndexedDB durability). */
 export function useProjects() {
   const [projects, setProjects] = useState<Project[]>([])
   const [storageReady, setStorageReady] = useState(false)
   const [storageError, setStorageError] = useState<string | null>(null)
+  const [storageBackend, setStorageBackend] = useState<'idb' | 'local' | 'unknown'>('unknown')
 
   useEffect(() => {
-    const result = loadProjects()
-    if (result.ok) {
-      setProjects(result.data)
-      setStorageError(null)
-    } else {
-      setStorageError(result.error)
-      setProjects([])
-    }
-    setStorageReady(true)
+    let cancelled = false
+    void (async () => {
+      const result = await hydrateProjectsPreferred()
+      if (cancelled) return
+      if (result.ok) {
+        setProjects(result.data)
+        setStorageError(null)
+        setStorageBackend(result.data.length >= 0 ? 'idb' : 'local')
+      } else {
+        setStorageError(result.error)
+        setProjects([])
+        setStorageBackend('local')
+      }
+      setStorageReady(true)
+    })()
+    return () => { cancelled = true }
   }, [])
 
   const create = useCallback((
@@ -66,14 +75,27 @@ export function useProjects() {
     return false
   }, [projects])
 
+  const persistAll = useCallback((next: Project[]) => {
+    const result = saveProjects(next)
+    if (result.ok) {
+      setProjects(next)
+      setStorageError(null)
+      return true
+    }
+    setStorageError(result.error)
+    return false
+  }, [])
+
   return {
     projects,
     setProjects,
     storageReady,
     storageError,
     setStorageError,
+    storageBackend,
     create,
     remove,
     update,
+    persistAll,
   }
 }

@@ -1,16 +1,21 @@
 /**
- * Persistence layer for RahSaz v0.11.0
+ * Persistence layer for RahSaz v0.15.0 (Package B)
+ * - localStorage: fast sync cache + legacy migration
+ * - IndexedDB: durable store for full project payloads (via idb.ts)
  */
 
 import { uid } from '../uid'
 import type {
   Project, StorageResult, Task, DiscoveryData, AiData, AiMessage, FilesData, ProjectFile, QaData,
   TestReport, VersionsData, VersionSnapshot, TestCheck,
-  RequirementsData, RequirementItem, ArchitectureData,
+  RequirementsData, RequirementItem, ArchitectureData, ActivityEntry, PublishData,
 } from '../../shared/types'
+import { DATA_SCHEMA_VERSION } from '../../shared/types'
+import { idbLoadProjects, idbSaveProjects } from './idb'
 
-const STORAGE_KEY = 'rahsaz.projects.v0110'
+const STORAGE_KEY = 'rahsaz.projects.v0150'
 const LEGACY_KEYS = [
+  'rahsaz.projects.v0110',
   'rahsaz.projects.v0102',
   'rahsaz.projects.v080',
   'rahsaz.projects.v070',
@@ -64,6 +69,24 @@ function migrateProject(p: any): Project {
     qa: normalizeQa(p.qa),
     testReport: normalizeTestReport(p.testReport),
     versions: normalizeVersions(p.versions),
+    schemaVersion: typeof p.schemaVersion === 'number' ? p.schemaVersion : DATA_SCHEMA_VERSION,
+    activity: Array.isArray(p.activity)
+      ? p.activity.filter((a: any) => a && typeof a.id === 'string').map((a: any) => ({
+          id: a.id,
+          at: typeof a.at === 'string' ? a.at : now,
+          kind: typeof a.kind === 'string' ? a.kind : 'note',
+          message: typeof a.message === 'string' ? a.message : '',
+        })) as ActivityEntry[]
+      : undefined,
+    publish: p.publish && typeof p.publish === 'object'
+      ? {
+          status: ['not_ready','ready','published'].includes(p.publish.status) ? p.publish.status : 'not_ready',
+          target: typeof p.publish.target === 'string' ? p.publish.target : undefined,
+          lastPublishedAt: typeof p.publish.lastPublishedAt === 'string' ? p.publish.lastPublishedAt : undefined,
+          notes: typeof p.publish.notes === 'string' ? p.publish.notes : undefined,
+          updatedAt: typeof p.publish.updatedAt === 'string' ? p.publish.updatedAt : now,
+        } as PublishData
+      : undefined,
   }
 }
 
@@ -245,6 +268,24 @@ function normalizeProject(p: any): Project | null {
     qa: normalizeQa(p.qa),
     testReport: normalizeTestReport(p.testReport),
     versions: normalizeVersions(p.versions),
+    schemaVersion: typeof p.schemaVersion === 'number' ? p.schemaVersion : DATA_SCHEMA_VERSION,
+    activity: Array.isArray(p.activity)
+      ? p.activity.filter((a: any) => a && typeof a.id === 'string').map((a: any) => ({
+          id: a.id,
+          at: typeof a.at === 'string' ? a.at : now,
+          kind: typeof a.kind === 'string' ? a.kind : 'note',
+          message: typeof a.message === 'string' ? a.message : '',
+        })) as ActivityEntry[]
+      : undefined,
+    publish: p.publish && typeof p.publish === 'object'
+      ? {
+          status: ['not_ready','ready','published'].includes(p.publish.status) ? p.publish.status : 'not_ready',
+          target: typeof p.publish.target === 'string' ? p.publish.target : undefined,
+          lastPublishedAt: typeof p.publish.lastPublishedAt === 'string' ? p.publish.lastPublishedAt : undefined,
+          notes: typeof p.publish.notes === 'string' ? p.publish.notes : undefined,
+          updatedAt: typeof p.publish.updatedAt === 'string' ? p.publish.updatedAt : now,
+        } as PublishData
+      : undefined,
   }
 }
 
@@ -260,7 +301,14 @@ export function loadProjects(): StorageResult<Project[]> {
 
 export function saveProjects(projects: Project[]): StorageResult<void> {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
+    const stamped = projects.map(p => ({
+      ...p,
+      schemaVersion: DATA_SCHEMA_VERSION,
+      updatedAt: p.updatedAt || new Date().toISOString(),
+    }))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stamped))
+    // Durable copy in IndexedDB (async; does not block UI)
+    void idbSaveProjects(stamped)
     return { ok: true, data: undefined }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Failed to save projects' }
@@ -366,4 +414,26 @@ export function storageUsage(): { bytes: number; limit: number } {
     }
   } catch { /* unavailable */ }
   return { bytes, limit: 5 * 1024 * 1024 }
+}
+
+
+/**
+ * Prefer IndexedDB data when available and non-empty; otherwise localStorage.
+ * Migrates LS → IDB when IDB is empty.
+ */
+export async function hydrateProjectsPreferred(): Promise<StorageResult<Project[]>> {
+  const idb = await idbLoadProjects()
+  if (idb.ok && idb.data.length > 0) {
+    const normalized = idb.data.map(normalizeProject).filter((p): p is Project => p !== null)
+    // keep LS cache warm
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized))
+    } catch { /* quota */ }
+    return { ok: true, data: normalized }
+  }
+  const ls = loadProjects()
+  if (ls.ok && ls.data.length > 0) {
+    void idbSaveProjects(ls.data)
+  }
+  return ls
 }
