@@ -31,12 +31,14 @@ export function useProjects() {
     description: string,
     language: Language,
   ) => {
-    const result = storageCreate(name, type, description, language, projects)
+    const result = storageCreate(
+      { name, type, description, language },
+      projects,
+    )
     if (result.ok) {
       setProjects(result.data)
       setStorageError(null)
-      const created = result.data[0]
-      return created || null
+      return result.data[0] || null
     }
     setStorageError(result.error)
     return null

@@ -68,8 +68,6 @@ export default function App() {
     storageReady,
     storageError,
     setStorageError,
-    create: createProjectHook,
-    remove: removeProjectHook,
   } = useProjects()
 
   const [showCreate, setShowCreate] = useState(false)
