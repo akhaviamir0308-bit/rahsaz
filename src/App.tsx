@@ -23,24 +23,25 @@ import {
   buildPromptFromTemplate,
   computeNextStep,
   type WorkspaceTab,
-} from './lib/workspaceMeta'
-import { buildRequirements, requirementsToMarkdown } from './lib/requirementsEngine'
-import { suggestArchitecture, architectureToMarkdown } from './lib/architectureAdvisor'
-import { buildPlanTasks } from './lib/planningEngine'
-import { importZipFiles } from './lib/zipImport'
+} from './modules/workspace/workspaceMeta'
+import { buildRequirements, requirementsToMarkdown } from './modules/requirements/requirementsEngine'
+import { suggestArchitecture, architectureToMarkdown } from './modules/architecture/architectureAdvisor'
+import { buildPlanTasks } from './modules/planning/planningEngine'
+import { importZipFiles } from './modules/file-manager/zipImport'
 import {
-  loadProjects, createProject as storageCreate,
+  createProject as storageCreate,
   deleteProject as storageDelete, updateProject as storageUpdate, storageInfo,
   importProject as storageImport, storageUsage,
 } from './storage'
 import { buildZip, downloadBlob } from './zip'
 import { uid, lsGet, lsSet } from './uid'
-import PreviewPane from './components/PreviewPane'
+import PreviewPane from './modules/preview/PreviewPane'
 import { findBrokenRefs, listPages } from './preview'
-import LearnView from './components/LearnView'
-import { ProjectCard } from './components/ProjectCard'
+import LearnView from './modules/academy/LearnView'
+import { ProjectCard } from './modules/projects/ProjectCard'
 import type { ActionId } from './data/learn'
 import { buildDemo, buildControlDocs } from './data/demo'
+import { useProjects } from './shared/hooks/useProjects'
 
 const projectTypes: ProjectType[] = [
   'portfolio', 'business', 'store', 'education',
@@ -61,9 +62,15 @@ export default function App() {
   const [theme, setTheme] = useState<Theme>(
     () => (lsGet('rahsaz.theme') === 'light' ? 'light' : 'dark')
   )
-  const [projects, setProjects] = useState<Project[]>([])
-  const [storageReady, setStorageReady] = useState(false)
-  const [storageError, setStorageError] = useState<string | null>(null)
+  const {
+    projects,
+    setProjects,
+    storageReady,
+    storageError,
+    setStorageError,
+    create: createProjectHook,
+    remove: removeProjectHook,
+  } = useProjects()
 
   const [showCreate, setShowCreate] = useState(false)
   const [activePage, setActivePage] = useState<PageId>('overview')
@@ -117,13 +124,6 @@ export default function App() {
     () => projects.find(p => p.id === activeProjectId) || null,
     [projects, activeProjectId]
   )
-
-  useEffect(() => {
-    const result = loadProjects()
-    if (result.ok) { setProjects(result.data); setStorageError(null) }
-    else { setStorageError(result.error); setProjects([]) }
-    setStorageReady(true)
-  }, [])
 
   useEffect(() => {
     document.documentElement.lang = language

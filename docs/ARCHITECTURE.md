@@ -1,10 +1,34 @@
-# Rahsaz v0.11.0
+# معماری راه‌ساز v0.14.0 (بسته A — فاز ۲ اولیه)
 
-## Engines
-- `lib/requirementsEngine.ts` — discovery → structured requirements
-- `lib/architectureAdvisor.ts` — type + signals → stack/pages
-- `lib/planningEngine.ts` — requirements + architecture → tasks
-- `lib/workspaceMeta.ts` — next-step coach
+## ساختار
+```
+src/
+  app/                 # (آینده) پوسته و providers
+  core/
+    storage/           # localStorage + migration
+    zip/               # export ZIP
+    uid.ts
+  modules/
+    academy/
+    architecture/
+    file-manager/
+    planning/
+    preview/
+    projects/
+    requirements/
+    workspace/
+  shared/
+    types/
+    hooks/useProjects.ts
+  data/
+  App.tsx              # هنوز orchestrator؛ در حال کاهش مسئولیت
+```
 
-## Data
-Project gains optional `requirements` and `architecture` fields.
+## اصول
+- منطق تجاری engines بدون وابستگی به React
+- دسترسی persistence از طریق storage / hooks
+- سازگاری عقب‌رو با shimهای `src/storage.ts` و مشابه
+
+## باقی‌مانده فاز ۲
+- استخراج کامل ProjectWorkspace از App.tsx
+- providers و مدیریت خطای مشترک

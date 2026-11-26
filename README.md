@@ -1,10 +1,13 @@
-# Rahsaz — v0.13.0
+# Rahsaz — v0.14.0 (Package A)
 
-## In-browser React preview
-- Detects Vite/React projects
-- Bundles the virtual file tree with **esbuild-wasm** inside the browser
-- Bare imports resolve via **esm.sh** CDN
-- Static HTML preview still works as before
+## Phase 1 — Audit
+See `docs/AUDIT_v0.13.2.md`.
+
+## Phase 2 — Architecture (started)
+- `src/core/` storage, zip, uid
+- `src/modules/` domain modules
+- `src/shared/types`, `shared/hooks/useProjects`
+- Compatibility shims kept at old paths
 
 ```bash
 npm install
