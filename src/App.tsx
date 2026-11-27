@@ -10,7 +10,7 @@ import {
 import type {
   Language, Project, ProjectType, ProjectStage, ProjectStatus,
   Theme, Task, DiscoveryData, DiscoveryAnswer, AiData, AiMessage, FilesData, ProjectFile, QaData,
-  TestReport, VersionsData, VersionSnapshot
+  TestReport, TestCheck, VersionsData, VersionSnapshot
 } from './types'
 import {
   getTranslations, type TranslationKeys, DISCOVERY_QUESTIONS, PROMPT_TEMPLATES
@@ -23,31 +23,24 @@ import {
   buildPromptFromTemplate,
   computeNextStep,
   type WorkspaceTab,
-} from './modules/workspace/workspaceMeta'
-import { buildRequirements, requirementsToMarkdown } from './modules/requirements/requirementsEngine'
-import { suggestArchitecture, architectureToMarkdown } from './modules/architecture/architectureAdvisor'
-import { buildPlanTasks, pickNextTask } from './modules/planning/planningEngine'
-import { importZipFiles } from './modules/file-manager/zipImport'
-import { parseAiProposedFiles } from './modules/ai-center/parseAiFiles'
-import { runProjectTests } from './modules/testing/runTests'
-import { buildQualityReport } from './modules/quality/qualityReport'
-import { buildPublishGuide } from './modules/publishing/publishGuide'
-import ProjectStatusCard from './shared/components/ProjectStatusCard'
-import ProductPathBanner from './shared/components/ProductPathBanner'
-import { evaluateGuidance } from './modules/guidance/guidanceEngine'
+} from './lib/workspaceMeta'
+import { buildRequirements, requirementsToMarkdown, discoveryHash, summarize, KIND_LABELS } from './lib/requirementsEngine'
+import { suggestArchitecture, architectureToMarkdown } from './lib/architectureAdvisor'
+import { buildPlanTasks } from './lib/planningEngine'
 import {
-  createProject as storageCreate,
+  loadProjects, createProject as storageCreate,
   deleteProject as storageDelete, updateProject as storageUpdate, storageInfo,
   importProject as storageImport, storageUsage,
 } from './storage'
 import { buildZip, downloadBlob } from './zip'
 import { uid, lsGet, lsSet } from './uid'
-import PreviewPane from './modules/preview/PreviewPane'
-import LearnView from './modules/academy/LearnView'
-import { ProjectCard } from './modules/projects/ProjectCard'
+import PreviewPane from './components/PreviewPane'
+import { findBrokenRefs, listPages } from './preview'
+import LearnView from './components/LearnView'
+import { ProjectCard } from './components/ProjectCard'
 import type { ActionId } from './data/learn'
+import type { RequirementItem } from './types'
 import { buildDemo, buildControlDocs } from './data/demo'
-import { useProjects } from './shared/hooks/useProjects'
 
 const projectTypes: ProjectType[] = [
   'portfolio', 'business', 'store', 'education',
@@ -68,13 +61,9 @@ export default function App() {
   const [theme, setTheme] = useState<Theme>(
     () => (lsGet('rahsaz.theme') === 'light' ? 'light' : 'dark')
   )
-  const {
-    projects,
-    setProjects,
-    storageReady,
-    storageError,
-    setStorageError,
-  } = useProjects()
+  const [projects, setProjects] = useState<Project[]>([])
+  const [storageReady, setStorageReady] = useState(false)
+  const [storageError, setStorageError] = useState<string | null>(null)
 
   const [showCreate, setShowCreate] = useState(false)
   const [activePage, setActivePage] = useState<PageId>('overview')
@@ -107,8 +96,6 @@ export default function App() {
 
   // Files
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
-  const [currentFolder, setCurrentFolder] = useState('')
-  const [fileSearch, setFileSearch] = useState('')
   const [editorContent, setEditorContent] = useState('')
   const [editorDirty, setEditorDirty] = useState(false)
   const [newPath, setNewPath] = useState('')
@@ -120,6 +107,9 @@ export default function App() {
   const [snapLabel, setSnapLabel] = useState('')
   const [snapNote, setSnapNote] = useState('')
   const [importMsg, setImportMsg] = useState('')
+  const [newReqTitle, setNewReqTitle] = useState('')
+  const [reqEditId, setReqEditId] = useState<string | null>(null)
+  const [reqEditText, setReqEditText] = useState('')
   const [learnLesson, setLearnLesson] = useState<string | undefined>(undefined)
 
   const t = useMemo(() => getTranslations(language), [language])
@@ -129,6 +119,13 @@ export default function App() {
     () => projects.find(p => p.id === activeProjectId) || null,
     [projects, activeProjectId]
   )
+
+  useEffect(() => {
+    const result = loadProjects()
+    if (result.ok) { setProjects(result.data); setStorageError(null) }
+    else { setStorageError(result.error); setProjects([]) }
+    setStorageReady(true)
+  }, [])
 
   useEffect(() => {
     document.documentElement.lang = language
@@ -161,7 +158,6 @@ export default function App() {
     setPasteText('')
     setCopied(false)
     setSelectedFileId(null)
-    setCurrentFolder('')
     setEditorContent('')
     setEditorDirty(false)
     setNewPath('')
@@ -287,11 +283,13 @@ export default function App() {
     if (!activeProject) return
     const discovery = buildDiscoveryData(true)
     const draft: Project = { ...activeProject, discovery }
-    const requirements = buildRequirements(draft, isFa)
-    const result = storageUpdate(activeProject.id, { discovery, requirements, stage: 'planning' }, projects)
+    // never overwrite an existing (possibly edited / confirmed) document: it is flagged as outdated instead
+    const requirements = activeProject.requirements?.items?.length ? activeProject.requirements : buildRequirements(draft, isFa)
+    const nextStage = activeProject.stage === 'discovery' ? 'planning' : activeProject.stage
+    const result = storageUpdate(activeProject.id, { discovery, requirements, stage: nextStage }, projects)
     if (result.ok) {
       setProjects(result.data)
-      setEditStage('planning')
+      setEditStage(nextStage)
       setSaveMessage(t.requirementsConfirmed)
       setTimeout(() => setSaveMessage(''), 3000)
       setWorkspaceTab('requirements')
@@ -348,16 +346,11 @@ export default function App() {
 
   const handleSaveResponse = useCallback(() => {
     if (!activeProject || !pasteText.trim()) return
-    const content = pasteText.trim()
-    const proposed = parseAiProposedFiles(content)
     const msg: AiMessage = {
       id: uid(),
       role: 'assistant',
-      content,
+      content: pasteText.trim(),
       createdAt: new Date().toISOString(),
-      reviewed: false,
-      applied: false,
-      label: proposed.length ? `${proposed.length} file(s)` : undefined,
     }
     const messages = [...(activeProject.ai?.messages || []), msg]
     const ai: AiData = { messages, updatedAt: new Date().toISOString() }
@@ -365,14 +358,10 @@ export default function App() {
     if (result.ok) {
       setProjects(result.data)
       setPasteText('')
-      setSaveMessage(
-        proposed.length
-          ? (isFa ? `پاسخ ذخیره شد — ${proposed.length} فایل پیشنهادی` : `Saved — ${proposed.length} proposed file(s)`)
-          : t.responseSaved,
-      )
+      setSaveMessage(t.responseSaved)
       setTimeout(() => setSaveMessage(''), 2500)
     } else setStorageError(result.error)
-  }, [activeProject, pasteText, projects, t, isFa])
+  }, [activeProject, pasteText, projects, t])
 
   const handleDeleteMessage = useCallback((msgId: string) => {
     if (!activeProject) return
@@ -406,85 +395,13 @@ export default function App() {
     return false
   }, [activeProject, projects])
 
-
-  const handleApplyAiMessageFiles = useCallback((msgId: string) => {
-    if (!activeProject) return
-    const msg = (activeProject.ai?.messages || []).find(m => m.id === msgId)
-    if (!msg) return
-    const proposed = parseAiProposedFiles(msg.content)
-    if (!proposed.length) {
-      setSaveMessage(isFa ? 'فایل قابل استخراج در پاسخ نیست' : 'No extractable files in response')
-      setTimeout(() => setSaveMessage(''), 2500)
-      return
-    }
-    if (!window.confirm(isFa
-      ? `${proposed.length} فایل از پاسخ AI اعمال شود؟ مسیرهای هم‌نام جایگزین می‌شوند. قبلش snapshot گرفته می‌شود.`
-      : `Apply ${proposed.length} file(s) from AI response? Same paths will be overwritten. A snapshot is taken first.`)) return
-    const now = new Date().toISOString()
-    {
-      const snapFiles = getFiles().map(f => ({ ...f }))
-      const snap = {
-        id: uid(),
-        label: isFa ? 'قبل از اعمال AI' : 'Before AI apply',
-        note: msgId,
-        createdAt: now,
-        files: snapFiles,
-        stage: activeProject.stage,
-      }
-      const prev = activeProject.versions?.snapshots || []
-      const versions = { snapshots: [snap, ...prev].slice(0, 20), updatedAt: now }
-      storageUpdate(activeProject.id, { versions }, projects)
-    }
-    const byPath = new Map(getFiles().map(f => [f.path, f]))
-    for (const item of proposed) {
-      const path = normalizePath(item.path)
-      if (!path || path.includes('..')) continue
-      const segs = path.split('/')
-      for (let i = 0; i < segs.length - 1; i++) {
-        const folderPath = segs.slice(0, i + 1).join('/')
-        if (!byPath.has(folderPath)) {
-          byPath.set(folderPath, { id: uid(), path: folderPath, kind: 'folder' as const, updatedAt: now })
-        }
-      }
-      const prev = byPath.get(path)
-      byPath.set(path, {
-        id: prev?.id || uid(),
-        path,
-        kind: 'file',
-        content: item.content,
-        updatedAt: now,
-        size: item.content.length,
-      })
-    }
-    const next = Array.from(byPath.values()).sort((a, b) => a.path.localeCompare(b.path))
-    persistFiles(next)
-    const messages = (activeProject.ai?.messages || []).map(m =>
-      m.id === msgId ? { ...m, applied: true, reviewed: true } : m,
-    )
-    const ai: AiData = { messages, updatedAt: now }
-    const result = storageUpdate(activeProject.id, { ai }, projects)
-    if (result.ok) {
-      setProjects(result.data)
-      setSaveMessage(isFa ? 'فایل‌های AI اعمال شد' : 'AI files applied')
-      setTimeout(() => setSaveMessage(''), 2500)
-    } else setStorageError(result.error)
-  }, [activeProject, getFiles, persistFiles, projects, isFa])
-
   const normalizePath = (raw: string) =>
     raw.trim().replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/')
 
   const handleCreateFile = useCallback((kind: 'file' | 'folder') => {
     if (!activeProject) return
     setFileError('')
-    let raw = newPath.trim()
-    // If user types a bare name, put it under current folder
-    if (raw && !raw.includes('/') && currentFolder) {
-      raw = currentFolder.replace(/\/+$/, '') + '/' + raw
-    } else if (!raw && currentFolder && kind === 'file') {
-      setFileError(t.invalidPath)
-      return
-    }
-    const path = normalizePath(raw)
+    const path = normalizePath(newPath)
     if (!path || path.includes('..')) {
       setFileError(t.invalidPath)
       return
@@ -522,25 +439,15 @@ export default function App() {
       setEditorContent('')
       setEditorDirty(false)
     }
-  }, [activeProject, newPath, currentFolder, getFiles, persistFiles, t])
+  }, [activeProject, newPath, getFiles, persistFiles, t])
 
   const handleSelectFile = useCallback((file: ProjectFile) => {
-    if (file.kind === 'folder') {
-      setCurrentFolder(file.path)
-      setNewPath(file.path.endsWith('/') ? file.path : file.path + '/')
-      setSelectedFileId(null)
-      setFileError('')
-      return
-    }
     if (file.kind !== 'file') return
     if (editorDirty && file.id !== selectedFileId && !window.confirm(t.confirmDiscardEdits)) return
     setSelectedFileId(file.id)
     setEditorContent(file.content || '')
     setEditorDirty(false)
     setFileError('')
-    // keep parent folder as context
-    const parent = file.path.includes('/') ? file.path.split('/').slice(0, -1).join('/') : ''
-    setCurrentFolder(parent)
   }, [editorDirty, selectedFileId, t])
 
   const handleSaveFile = useCallback(() => {
@@ -629,9 +536,49 @@ Created with Rahsaz.
 
 
   const runFileTests = useCallback((): TestReport => {
-    if (!activeProject) return { checks: [], ranAt: new Date().toISOString() }
-    return runProjectTests(activeProject, getFiles())
-  }, [activeProject, getFiles])
+    const files = getFiles().filter(f => f.kind === 'file')
+    const checks: TestCheck[] = []
+    const hasIndex = files.some(f => f.path === 'index.html' || f.path.endsWith('/index.html'))
+    checks.push({
+      id: 'hasIndex',
+      labelKey: 'tc_hasIndex',
+      ok: hasIndex,
+      detail: hasIndex ? 'tc_hasIndex_ok' : 'tc_hasIndex_fail',
+    })
+    const emptyFiles = files.filter(f => (f.content || '').trim() === '')
+    checks.push({
+      id: 'notEmpty',
+      labelKey: 'tc_notEmpty',
+      ok: emptyFiles.length === 0,
+      detail: emptyFiles.length === 0 ? 'tc_notEmpty_ok' : 'tc_notEmpty_fail',
+    })
+    const hasCss = files.some(f => f.path.endsWith('.css'))
+    checks.push({
+      id: 'hasCss',
+      labelKey: 'tc_hasCss',
+      ok: hasCss,
+      detail: hasCss ? 'tc_hasCss_ok' : 'tc_hasCss_fail',
+    })
+    const pages = listPages(getFiles())
+    if (pages.length > 0) {
+      const all = getFiles()
+      const missing = [...new Set(pages.flatMap(pg => findBrokenRefs(all, pg)))]
+      const critical = missing.filter(r => !/\.(png|jpe?g|gif|webp|avif|ico|svg|woff2?|ttf|otf|mp4|webm|mp3|pdf)$/i.test(r.replace(/[?#].*$/, '')))
+      checks.push({
+        id: 'brokenRefs',
+        labelKey: 'tc_brokenRefs',
+        ok: critical.length === 0,
+        detail: critical.length === 0 ? 'tc_brokenRefs_ok' : critical.slice(0, 5).join(', '),
+      })
+    }
+    checks.push({
+      id: 'fileCount',
+      labelKey: 'tc_fileCount',
+      ok: files.length > 0,
+      detail: String(files.length),
+    })
+    return { checks, ranAt: new Date().toISOString() }
+  }, [getFiles])
 
   const handleRunTests = useCallback(() => {
     if (!activeProject) return
@@ -836,6 +783,9 @@ Created with Rahsaz.
 
   const handleGenerateRequirements = useCallback(() => {
     if (!activeProject) return
+    const old = activeProject.requirements
+    const hasWork = Boolean(old?.confirmed || old?.items?.some(i => i.custom))
+    if (old?.items?.length && hasWork && !window.confirm(t.reqOverwrite)) return
     const requirements = buildRequirements(activeProject, isFa)
     const result = storageUpdate(activeProject.id, { requirements }, projects)
     if (result.ok) {
@@ -845,13 +795,45 @@ Created with Rahsaz.
     } else setStorageError(result.error)
   }, [activeProject, isFa, projects, t])
 
+  /** Apply an edit to the requirements document (an edit un-confirms it). */
+  const updateRequirements = useCallback((mutate: (items: RequirementItem[]) => RequirementItem[]) => {
+    if (!activeProject?.requirements) return
+    const items = mutate(activeProject.requirements.items)
+    const requirements = {
+      ...activeProject.requirements,
+      items,
+      summary: summarize(activeProject, items, isFa),
+      confirmed: false,
+      updatedAt: new Date().toISOString(),
+    }
+    const result = storageUpdate(activeProject.id, { requirements }, projects)
+    if (result.ok) setProjects(result.data)
+    else setStorageError(result.error)
+  }, [activeProject, isFa, projects])
+
+  const handleAddRequirement = useCallback(() => {
+    const title = newReqTitle.trim()
+    if (!title || !activeProject) return
+    const base = activeProject.requirements
+    if (!base) {
+      const fresh = buildRequirements(activeProject, isFa)
+      const items = [...fresh.items, { id: uid(), title, description: title, kind: 'functional' as const, priority: 1 as const, sourceQuestionIds: [], custom: true }]
+      const result = storageUpdate(activeProject.id, { requirements: { ...fresh, items, summary: summarize(activeProject, items, isFa) } }, projects)
+      if (result.ok) setProjects(result.data); else setStorageError(result.error)
+    } else {
+      updateRequirements(items => [...items, { id: uid(), title, description: title, kind: 'functional', priority: 1, sourceQuestionIds: [], custom: true }])
+    }
+    setNewReqTitle('')
+  }, [newReqTitle, activeProject, isFa, projects, updateRequirements])
+
   const handleConfirmRequirements = useCallback(() => {
     if (!activeProject?.requirements) return
     const requirements = { ...activeProject.requirements, confirmed: true, updatedAt: new Date().toISOString() }
-    const result = storageUpdate(activeProject.id, { requirements, stage: 'planning' }, projects)
+    const nextStage = activeProject.stage === 'discovery' ? 'planning' : activeProject.stage
+    const result = storageUpdate(activeProject.id, { requirements, stage: nextStage }, projects)
     if (result.ok) {
       setProjects(result.data)
-      setEditStage('planning')
+      setEditStage(nextStage)
       setSaveMessage(t.reqConfirmed)
       setTimeout(() => setSaveMessage(''), 2000)
     } else setStorageError(result.error)
@@ -867,6 +849,7 @@ Created with Rahsaz.
 
   const handleGenerateArchitecture = useCallback(() => {
     if (!activeProject) return
+    if (activeProject.architecture?.confirmed && !window.confirm(t.archOverwrite)) return
     const architecture = suggestArchitecture(activeProject, isFa)
     const result = storageUpdate(activeProject.id, { architecture }, projects)
     if (result.ok) {
@@ -900,65 +883,17 @@ Created with Rahsaz.
     const generated = buildPlanTasks(activeProject, activeProject.requirements, activeProject.architecture, isFa)
     const existingManual = (activeProject.tasks || []).filter(tk => tk.source !== 'planning')
     const tasks = [...generated, ...existingManual]
-    const result = storageUpdate(activeProject.id, { tasks, stage: 'planning' }, projects)
+    const nextStage = activeProject.stage === 'discovery' ? 'planning' : activeProject.stage
+    const result = storageUpdate(activeProject.id, { tasks, stage: nextStage }, projects)
     if (result.ok) {
       setProjects(result.data)
-      setEditStage('planning')
+      setEditStage(nextStage)
       setWorkspaceTab('tasks')
       setSaveMessage(t.planGenerated)
       setTimeout(() => setSaveMessage(''), 2500)
     } else setStorageError(result.error)
   }, [activeProject, isFa, projects, t])
 
-
-
-  const handleImportZip = useCallback(async (fileList: FileList | null) => {
-    if (!activeProject || !fileList || fileList.length === 0) return
-    const file = fileList[0]
-    if (!window.confirm(t.importZipConfirm)) return
-    try {
-      const buf = await file.arrayBuffer()
-      const imported = await importZipFiles(buf)
-      if (imported.length === 0) {
-        setFileError(t.importZipEmpty)
-        return
-      }
-      const now = new Date().toISOString()
-      const byPath = new Map(getFiles().map(f => [f.path, f]))
-      for (const item of imported) {
-        const path = normalizePath(item.path)
-        if (!path || path.includes('..')) continue
-        // ensure parent folder entries exist
-        const segs = path.split('/')
-        for (let i = 0; i < segs.length - 1; i++) {
-          const folderPath = segs.slice(0, i + 1).join('/')
-          if (!byPath.has(folderPath)) {
-            byPath.set(folderPath, {
-              id: uid(),
-              path: folderPath,
-              kind: 'folder' as const,
-              updatedAt: now,
-            })
-          }
-        }
-        const prev = byPath.get(path)
-        byPath.set(path, {
-          id: prev?.id || uid(),
-          path,
-          kind: 'file',
-          content: item.content,
-          updatedAt: now,
-        })
-      }
-      const next = Array.from(byPath.values()).sort((a, b) => a.path.localeCompare(b.path))
-      persistFiles(next)
-      setSaveMessage(t.importZipDone + ` (${imported.length})`)
-      setTimeout(() => setSaveMessage(''), 3000)
-      setFileError('')
-    } catch {
-      setFileError(t.importZipFail)
-    }
-  }, [activeProject, getFiles, persistFiles, t])
 
   const nav = [
     { id: 'overview' as const, label: t.overview, icon: Compass },
@@ -1008,7 +943,6 @@ Created with Rahsaz.
               { id: 'discovery' as const, label: t.projectDiscovery, icon: ClipboardList },
               { id: 'requirements' as const, label: t.projectRequirements, icon: FileText },
               { id: 'architecture' as const, label: t.projectArchitecture, icon: Network },
-              { id: 'design' as const, label: isFa ? 'طراحی' : 'Design', icon: Layers3 },
               { id: 'ai' as const, label: t.projectAi, icon: Bot },
               { id: 'files' as const, label: t.projectFiles, icon: FileCode2 },
               { id: 'preview' as const, label: t.projectPreview, icon: Eye },
@@ -1051,7 +985,6 @@ Created with Rahsaz.
                   : workspaceTab === 'discovery' ? t.projectDiscovery
                   : workspaceTab === 'requirements' ? t.projectRequirements
                   : workspaceTab === 'architecture' ? t.projectArchitecture
-                  : workspaceTab === 'design' ? (isFa ? 'طراحی' : 'Design')
                   : workspaceTab === 'ai' ? t.projectAi
                   : workspaceTab === 'files' ? t.projectFiles
                   : workspaceTab === 'preview' ? t.projectPreview
@@ -1124,39 +1057,6 @@ Created with Rahsaz.
                   <div className="stat-card">
                     <span>{t.progress}</span>
                     <strong style={{ fontSize: 16 }}>{progressPct}%</strong>
-
-                <ProjectStatusCard
-                  project={activeProject}
-                  qaChecks={qaChecks}
-                  isFa={isFa}
-                  onCopied={(msg) => {
-                    setSaveMessage(msg)
-                    setTimeout(() => setSaveMessage(''), 2000)
-                  }}
-                />
-
-                {(() => {
-                  const qaDone = QA_KEYS.filter(k => qaChecks[k]).length
-                  const g = evaluateGuidance(activeProject, qaDone, QA_KEYS.length)
-                  return (
-                    <div className="ai-block" style={{ marginTop: 16 }}>
-                      <h3 className="ai-block-title">{isFa ? 'موتور راهبری پروژه (آزمایشی)' : 'Project guidance engine (experimental)'}</h3>
-                      <p><strong>{g.progressPct}%</strong> — {isFa ? g.nextActionFa : g.nextActionEn}</p>
-                      <button type="button" className="primary-button" style={{ marginTop: 8 }} onClick={() => setWorkspaceTab(g.nextTab as typeof workspaceTab)}>
-                        {isFa ? 'برو به اقدام بعدی' : 'Go to next action'}
-                      </button>
-                      <div className="qa-list" style={{ marginTop: 12 }}>
-                        {g.stages.map(s => (
-                          <div key={s.id} className={'qa-item ' + (s.status === 'completed' ? 'done' : '')}>
-                            <span>{s.status === 'completed' ? 'OK' : s.status === 'locked' ? '—' : '!'}</span>
-                            <span>{isFa ? s.titleFa : s.titleEn}</span>
-                            <small>{isFa ? s.reasonsFa[0] : s.reasonsEn[0]} · {s.status}</small>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })()}
                     <small>{doneCount} / {tasks.length} {t.tasksCompleted}</small>
                   </div>
                 </div>
@@ -1322,6 +1222,10 @@ Created with Rahsaz.
                   <button type="button" className="secondary-button" onClick={handleConfirmRequirements} disabled={!activeProject.requirements?.items?.length}>{t.reqConfirm}</button>
                   <button type="button" className="secondary-button" onClick={handleExportRequirementsMd} disabled={!activeProject.requirements?.items?.length}>{t.reqExportMd}</button>
                 </div>
+                <div className="task-add-row" style={{ marginBottom: 14 }}>
+                  <input type="text" value={newReqTitle} onChange={e => setNewReqTitle(e.target.value)} placeholder={t.reqAddPlaceholder} onKeyDown={e => { if (e.key === 'Enter') handleAddRequirement() }} aria-label={t.reqAddTitle} />
+                  <button className="secondary-button" onClick={handleAddRequirement} disabled={!newReqTitle.trim()}><Plus size={16} />{t.reqAdd}</button>
+                </div>
                 {!activeProject.requirements?.items?.length ? (
                   <p className="ai-hint">{t.reqEmpty}</p>
                 ) : (
@@ -1329,15 +1233,37 @@ Created with Rahsaz.
                     <h3 className="ai-block-title">{t.reqSummary}</h3>
                     <p>{activeProject.requirements.summary}</p>
                     {activeProject.requirements.confirmed && <p style={{ color: 'var(--green)' }}>{t.reqConfirmed}</p>}
+                    {activeProject.requirements.sourceHash !== undefined && activeProject.requirements.sourceHash !== discoveryHash(activeProject) && (
+                      <div className="ai-warn" style={{ marginTop: 12 }}><AlertTriangle size={16} /><span>{t.reqStale}</span></div>
+                    )}
                     <div className="req-summary" style={{ marginTop: 16 }}>
-                      {activeProject.requirements.items.map(item => (
-                        <div key={item.id} className="req-item">
-                          <strong>{item.code ? `${item.code} — ` : ''}{item.title}</strong>
-                          <p>{item.description}</p>
-                          {item.acceptanceCriteria && <p className="ai-hint">{item.acceptanceCriteria}</p>}
-                          <small>{item.kind} · P{item.priority}{item.status ? ` · ${item.status}` : ''}</small>
-                        </div>
-                      ))}
+                      {activeProject.requirements.items.map(item => {
+                        const editing = reqEditId === item.id
+                        return (
+                          <div key={item.id} className="req-item">
+                            <strong>{item.title}{item.custom && <small style={{ marginInlineStart: 8, color: 'var(--accent)' }}>· {t.reqEditedNote}</small>}</strong>
+                            {editing ? (
+                              <textarea value={reqEditText} onChange={e => setReqEditText(e.target.value)} rows={3} style={{ width: '100%', margin: '6px 0' }} />
+                            ) : <p>{item.description}</p>}
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+                              <select value={item.kind} aria-label="kind" onChange={e => updateRequirements(list => list.map(x => x.id === item.id ? { ...x, kind: e.target.value as RequirementItem['kind'], custom: true } : x))}>
+                                {(Object.keys(KIND_LABELS) as RequirementItem['kind'][]).map(k => <option key={k} value={k}>{isFa ? KIND_LABELS[k].fa : KIND_LABELS[k].en}</option>)}
+                              </select>
+                              <select value={item.priority} aria-label={t.reqPriority} onChange={e => updateRequirements(list => list.map(x => x.id === item.id ? { ...x, priority: Number(e.target.value) as 1 | 2 | 3, custom: true } : x))}>
+                                <option value={1}>P1 · {t.reqPriorityHigh}</option>
+                                <option value={2}>P2 · {t.reqPriorityMid}</option>
+                                <option value={3}>P3 · {t.reqPriorityLow}</option>
+                              </select>
+                              {editing ? (
+                                <button type="button" className="primary-button" onClick={() => { updateRequirements(list => list.map(x => x.id === item.id ? { ...x, description: reqEditText.trim() || x.description, custom: true } : x)); setReqEditId(null) }}>{t.reqSaveItem}</button>
+                              ) : (
+                                <button type="button" className="secondary-button" onClick={() => { setReqEditId(item.id); setReqEditText(item.description) }}>{t.reqEdit}</button>
+                              )}
+                              <button type="button" className="delete-button" title={t.reqDelete} onClick={() => updateRequirements(list => list.filter(x => x.id !== item.id))}><Trash2 size={15} /></button>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 )}
@@ -1361,6 +1287,7 @@ Created with Rahsaz.
                   <button type="button" className="secondary-button" onClick={handleExportArchitectureMd} disabled={!activeProject.architecture}>{t.archExportMd}</button>
                   <button type="button" className="secondary-button" onClick={handleGeneratePlan}>{t.planGenerate}</button>
                 </div>
+                <p className="ai-hint" style={{ marginTop: -6 }}>{!activeProject.requirements?.items?.length ? t.planNeedReq + ' ' : ''}{t.planOverwriteNote}</p>
                 {!activeProject.architecture ? (
                   <p className="ai-hint">{t.archEmpty}</p>
                 ) : (
@@ -1372,25 +1299,8 @@ Created with Rahsaz.
                     <p>{activeProject.architecture.rationale}</p>
                     <h3 className="ai-block-title">{t.archStack}</h3>
                     <ul>{activeProject.architecture.stack.map(s => <li key={s}>{s}</li>)}</ul>
-                    <p className="ai-hint">
-                      Backend: {activeProject.architecture.needsBackend ? '✓' : '—'}
-                      {' · '}Auth: {activeProject.architecture.needsAuth ? '✓' : '—'}
-                      {' · '}DB: {activeProject.architecture.needsDatabase ? '✓' : '—'}
-                    </p>
                     <h3 className="ai-block-title">{t.archPages}</h3>
                     <ul>{activeProject.architecture.pages.map(s => <li key={s}>{s}</li>)}</ul>
-                    {!!activeProject.architecture.risks?.length && (
-                      <>
-                        <h3 className="ai-block-title">{isFa ? 'ریسک‌ها' : 'Risks'}</h3>
-                        <ul>{activeProject.architecture.risks.map(s => <li key={s}>{s}</li>)}</ul>
-                      </>
-                    )}
-                    {!!activeProject.architecture.deployHints?.length && (
-                      <>
-                        <h3 className="ai-block-title">{isFa ? 'استقرار' : 'Deploy'}</h3>
-                        <ul>{activeProject.architecture.deployHints.map(s => <li key={s}>{s}</li>)}</ul>
-                      </>
-                    )}
                   </div>
                 )}
               </section>
@@ -1535,16 +1445,6 @@ Created with Rahsaz.
                               {msg.role === 'user' ? t.aiPromptLabel : t.aiResultLabel}
                               {msg.label ? ` · ${msg.label}` : ''}
                             </span>
-                            {msg.role === 'assistant' && (
-                              <button
-                                type="button"
-                                className="secondary-button"
-                                style={{ fontSize: 12, padding: '2px 8px' }}
-                                onClick={() => handleApplyAiMessageFiles(msg.id)}
-                              >
-                                {isFa ? 'اعمال فایل‌ها' : 'Apply files'}
-                              </button>
-                            )}
                             <button type="button" className="delete-button" onClick={() => handleDeleteMessage(msg.id)} title={t.deleteMessage}>
                               <Trash2 size={14} />
                             </button>
@@ -1574,27 +1474,12 @@ Created with Rahsaz.
                   {saveMessage && <span className="save-toast">{saveMessage}</span>}
                 </div>
 
-                <div className="files-folder-bar">
-                  <span className="ai-hint">{t.currentFolder}: <strong>{currentFolder || t.rootFolder}</strong></span>
-                  {currentFolder ? (
-                    <button type="button" className="text-button" onClick={() => { setCurrentFolder(''); setNewPath('') }}>{t.rootFolder}</button>
-                  ) : null}
-                  <span className="ai-hint">{t.selectFolderHint}</span>
-                </div>
                 <div className="files-toolbar">
-                  <input
-                    type="search"
-                    value={fileSearch}
-                    onChange={e => setFileSearch(e.target.value)}
-                    placeholder={isFa ? 'جست‌وجوی فایل…' : 'Search files…'}
-                    className="files-path-input"
-                    style={{ maxWidth: 180 }}
-                  />
                   <input
                     type="text"
                     value={newPath}
                     onChange={e => setNewPath(e.target.value)}
-                    placeholder={currentFolder ? (currentFolder + '/...') : t.fileNamePlaceholder}
+                    placeholder={t.fileNamePlaceholder}
                     className="files-path-input"
                   />
                   <button type="button" className="secondary-button" onClick={() => handleCreateFile('file')}>
@@ -1603,16 +1488,6 @@ Created with Rahsaz.
                   <button type="button" className="secondary-button" onClick={() => handleCreateFile('folder')}>
                     <FolderPlus size={16} />{t.createFolder}
                   </button>
-                  <label className="secondary-button" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <Upload size={16} />
-                    {t.importZip}
-                    <input
-                      type="file"
-                      accept=".zip,application/zip"
-                      style={{ display: 'none' }}
-                      onChange={e => { void handleImportZip(e.target.files); e.target.value = '' }}
-                    />
-                  </label>
                   <button type="button" className="secondary-button" onClick={handleSeedStarter} title={t.seedStarterDesc}>
                     {t.seedStarter}
                   </button>
@@ -1632,12 +1507,13 @@ Created with Rahsaz.
                       </div>
                     ) : (
                       <ul className="file-list">
-                        {getFiles().filter(f => !fileSearch.trim() || f.path.toLowerCase().includes(fileSearch.trim().toLowerCase())).map(f => (
-                          <li key={f.id} className={`file-row ${selectedFileId === f.id ? 'active' : ''} ${f.kind === 'folder' && currentFolder === f.path ? 'active' : ''}`}>
+                        {getFiles().map(f => (
+                          <li key={f.id} className={`file-row ${selectedFileId === f.id ? 'active' : ''}`}>
                             <button
                               type="button"
                               className="file-open"
                               onClick={() => handleSelectFile(f)}
+                              disabled={f.kind === 'folder'}
                             >
                               {f.kind === 'folder' ? '📁' : '📄'} {f.path}
                             </button>
@@ -1840,39 +1716,6 @@ Created with Rahsaz.
                   </div>
                   {saveMessage && <span className="save-toast">{saveMessage}</span>}
                 </div>
-                {(() => {
-                  const qaDone = QA_KEYS.filter(k => qaChecks[k]).length
-                  const qr = buildQualityReport(activeProject, activeProject.testReport, qaDone, QA_KEYS.length)
-                  const guide = buildPublishGuide(activeProject)
-                  return (
-                    <div className="ai-block" style={{ marginBottom: 16 }}>
-                      <h3 className="ai-block-title">{isFa ? 'گزارش کیفیت' : 'Quality report'}</h3>
-                      <p><strong>{qr.score}/100</strong> — {isFa ? qr.levelLabelFa : qr.levelLabelEn}</p>
-                      {qr.publishBlocked && (
-                        <p className="ai-warn" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <AlertTriangle size={16} />
-                          {isFa ? 'انتشار توصیه نمی‌شود تا موارد بحرانی رفع شوند.' : 'Publishing is not recommended until critical issues are fixed.'}
-                        </p>
-                      )}
-                      {qr.critical.length > 0 && (
-                        <p className="ai-hint">{isFa ? 'بحرانی: ' : 'Critical: '}{qr.critical.join(', ')}</p>
-                      )}
-                      <h3 className="ai-block-title" style={{ marginTop: 16 }}>{isFa ? 'راهنمای انتشار' : 'Publish guide'} ({guide.projectKind})</h3>
-                      {guide.platforms.map(p => (
-                        <div key={p.id} style={{ marginBottom: 12 }}>
-                          <strong>{isFa ? p.titleFa : p.titleEn}</strong>
-                          <ol style={{ margin: '6px 0', paddingInlineStart: 22, lineHeight: 1.7 }}>
-                            {(isFa ? p.stepsFa : p.stepsEn).map((s, i) => <li key={i}>{s}</li>)}
-                          </ol>
-                        </div>
-                      ))}
-                      <ul style={{ paddingInlineStart: 22 }}>
-                        {(isFa ? guide.notesFa : guide.notesEn).map((n, i) => <li key={i}>{n}</li>)}
-                      </ul>
-                    </div>
-                  )
-                })()}
-
 
                 {(() => {
                   const files = getFiles().filter(f => f.kind === 'file')
@@ -1959,18 +1802,6 @@ Created with Rahsaz.
                     <p style={{ color: 'var(--muted)' }}>{doneCount} / {tasks.length} {t.tasksCompleted}</p>
                   </div>
                 </div>
-
-                {(() => {
-                  const next = pickNextTask(tasks)
-                  if (!next) return null
-                  return (
-                    <div className="ai-block" style={{ marginBottom: 12 }}>
-                      <h3 className="ai-block-title">{isFa ? 'پیشنهاد اقدام بعدی' : 'Suggested next action'}</h3>
-                      <p style={{ margin: 0 }}>{next.title}</p>
-                      {next.description && <p className="ai-hint">{next.description}</p>}
-                    </div>
-                  )
-                })()}
                 <div className="task-add-row">
                   <input
                     type="text"
@@ -1995,7 +1826,11 @@ Created with Rahsaz.
                         <button className="task-check" onClick={() => handleToggleTask(task.id)}>
                           {task.done ? <CheckCircle2 size={20} /> : <Circle size={20} />}
                         </button>
-                        <span className="task-title">{task.title}</span>
+                        <span className="task-title">
+                          {task.title}
+                          {task.description && <small style={{ display: 'block', color: 'var(--muted)', fontWeight: 400, marginTop: 2 }}>{task.description}</small>}
+                        </span>
+                        {task.priority && <small className="stage-tag" title={t.taskPriority}>P{task.priority}</small>}
                         <button className="delete-button" onClick={() => handleDeleteTask(task.id)}>
                           <Trash2 size={15} />
                         </button>
@@ -2133,8 +1968,6 @@ Created with Rahsaz.
           {activePage === 'overview' && (
             <>
               <section className="hero">
-              <ProductPathBanner isFa={isFa} />
-
                 <div className="hero-copy">
                   <div className="eyebrow"><Sparkles size={15} />{isFa ? 'فضای ساخت وب‌سایت با هوش مصنوعی' : 'AI-ASSISTED WEBSITE WORKSPACE'}</div>
                   <h1>{t.welcome}</h1>

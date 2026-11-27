@@ -8,7 +8,7 @@ const L = (fa: string, en: string): L => ({ fa, en })
 
 export type ActionId =
   | 'newProject' | 'demo'
-  | 'goto:overview' | 'goto:discovery' | 'goto:ai' | 'goto:files' | 'goto:preview'
+  | 'goto:overview' | 'goto:discovery' | 'goto:requirements' | 'goto:architecture' | 'goto:ai' | 'goto:files' | 'goto:preview'
   | 'goto:versions' | 'goto:publish' | 'goto:tasks' | 'goto:settings'
 
 export type Block =
@@ -52,7 +52,8 @@ export const LESSONS: Lesson[] = [
       { k: 'p', t: L('راه‌ساز یک «میز کار» برای ساخت وب‌سایت با کمک هوش مصنوعی است. شما بدون برنامه‌نویسی، ایده را به نیازمندی، نیازمندی را به کد، و کد را به یک لینک آنلاین تبدیل می‌کنید.', 'Rahsaz is a workbench for building websites with AI. Without coding, you turn an idea into requirements, requirements into code, and code into a live link.') },
       { k: 'h', t: L('مسیر کلی هر پروژه', 'The path every project follows') },
       { k: 'ol', items: [
-        L('نیازسنجی: به ۸ سؤال کلیدی جواب می‌دهید و نیازمندی‌ها را تأیید می‌کنید.', 'Discovery: answer 8 key questions and confirm requirements.'),
+        L('نیازسنجی: به ۸ سؤال کلیدی جواب می‌دهید.', 'Discovery: answer 8 key questions.'),
+        L('نیازمندی‌ها و معماری: راه‌ساز از پاسخ‌ها سند نیازمندی و پیشنهاد فنی می‌سازد؛ شما ویرایش و تأیید می‌کنید و برنامه وظایف می‌گیرید.', 'Requirements & architecture: Rahsaz builds a requirements document and a tech suggestion from your answers; you edit and confirm them and get a task plan.'),
         L('دستیار هوش مصنوعی: راه‌ساز یک پرامپت آماده می‌سازد، شما در ChatGPT یا Claude می‌چسبانید و پاسخ را برمی‌گردانید.', 'AI assistant: Rahsaz builds a ready prompt, you paste it in ChatGPT or Claude and bring the answer back.'),
         L('فایل‌ها: کد دریافتی را در ویرایشگر داخلی ذخیره می‌کنید.', 'Files: save the code you received in the built-in editor.'),
         L('پیش‌نمایش و کنترل کیفیت: سایت را در اندازه دسکتاپ، تبلت و موبایل می‌بینید.', 'Preview & QA: see the site at desktop, tablet and mobile sizes.'),
@@ -134,7 +135,7 @@ export const LESSONS: Lesson[] = [
       { k: 'ul', items: [
         L('هدف سایت، مخاطبان، قابلیت‌های ضروری، صفحات، منبع محتوا، سبک ظاهری، محدودیت‌ها و معیار موفقیت.', 'Goal, audience, essential features, pages, content source, visual style, constraints and success measure.'),
         L('نیازی نیست همه را پر کنید؛ ولی برای «تأیید نیازمندی‌ها» حداقل ۳ پاسخ لازم است.', 'You need not fill all of them, but confirming requires at least 3 answers.'),
-        L('«ذخیره» فقط ذخیره می‌کند. «تأیید» مرحله پروژه را به «برنامه‌ریزی» می‌برد.', '"Save" only saves. "Confirm" moves the project to the "Planning" stage.'),
+        L('«ذخیره» فقط ذخیره می‌کند. «تأیید» سند نیازمندی‌ها را می‌سازد و مرحله پروژه را از «نیازسنجی» به «برنامه‌ریزی» می‌برد.', '"Save" only saves. "Confirm" builds the requirements document and moves the project from Discovery to Planning.'),
       ] },
       { k: 'h', t: L('نمونه پاسخ خوب', 'A good answer example') },
       { k: 'table', head: [L('سؤال', 'Question'), L('پاسخ ضعیف', 'Weak answer'), L('پاسخ خوب', 'Good answer')], rows: [
@@ -144,6 +145,36 @@ export const LESSONS: Lesson[] = [
       ] },
       { k: 'tip', t: L('جواب را نمی‌دانید؟ از تب «دستیار AI» کارت «بررسی نیازسنجی» را بزنید؛ AI نقاط ضعف را پیدا می‌کند و سؤال تکمیلی می‌دهد.', 'Not sure what to answer? In the AI tab use the "Review discovery" card; the AI finds gaps and suggests follow-up questions.') },
       { k: 'action', id: 'goto:discovery', label: L('برو به نیازسنجی', 'Go to Discovery') },
+    ],
+  },
+  {
+    id: 't-reqarch', module: 'm1', minutes: 7,
+    title: L('نیازمندی‌ها، معماری و برنامه وظایف', 'Requirements, architecture and the task plan'),
+    summary: L('از پاسخ‌های نیازسنجی تا یک برنامه اجرایی قابل پیگیری.', 'From discovery answers to a trackable execution plan.'),
+    blocks: [
+      { k: 'p', t: L('بعد از تأیید نیازسنجی، راه‌ساز یک «سند نیازمندی» می‌سازد. این سند پل بین ایده شما و کدی است که ساخته می‌شود.', 'After you confirm discovery, Rahsaz builds a requirements document. It is the bridge between your idea and the code that gets built.') },
+      { k: 'h', t: L('تب نیازمندی‌ها', 'The Requirements tab') },
+      { k: 'ul', items: [
+        L('هر مورد یک نوع دارد: عملکردی، غیرعملکردی، محدودیت یا سؤال باز، و یک اولویت (P1 بالا تا P3 پایین).', 'Every item has a kind (functional, non-functional, constraint, open question) and a priority (P1 high to P3 low).'),
+        L('می‌توانید توضیح هر مورد را ویرایش، نوع و اولویت را عوض، مورد را حذف و نیازمندی دستی اضافه کنید. هر ویرایش «تأیید» را برمی‌دارد تا دوباره مرور کنید.', 'You can edit the text, change kind and priority, delete items and add manual ones. Any edit clears the confirmation so you review again.'),
+        L('اگر بعد از ساخت سند، پاسخ‌های نیازسنجی را عوض کنید، هشدار «قدیمی‌شدن» می‌بینید. بازسازی سند، ویرایش‌های دستی را جایگزین می‌کند و قبلش می‌پرسد.', 'If you change discovery answers after the document was built, you get an "outdated" warning. Regenerating replaces manual edits and asks first.'),
+        L('«سؤال باز» یعنی اطلاعات ناقص است؛ قبل از ساخت صفحه‌ها آن را روشن کنید.', 'An "open question" means information is missing; resolve it before building pages.'),
+        L('دکمه ذخیره در فایل‌ها، docs/requirements.md را می‌سازد تا همراه ZIP برود یا به AI داده شود.', 'The save-to-files button creates docs/requirements.md so it travels with the ZIP or can be given to an AI.'),
+      ] },
+      { k: 'h', t: L('تب معماری', 'The Architecture tab') },
+      { k: 'ul', items: [
+        L('راه‌ساز با توجه به نوع پروژه و کلمات کلیدی پاسخ‌ها (مثلاً «رزرو»، «سبد خرید»، «ورود کاربر») یک رویکرد پیشنهاد می‌دهد: استاتیک، محتوایی، فروشگاهی، رزرو، پویا یا وب‌اپ.', 'Based on the project type and keywords in your answers (e.g. booking, cart, user login) Rahsaz suggests an approach: static, content, store, booking, dynamic or web app.'),
+        L('عبارت‌هایی مثل «بدون پرداخت» نادیده گرفته می‌شوند.', 'Negated phrases such as "no payment" are ignored.'),
+        L('این فقط پیشنهاد است؛ برای نسخه اول تقریباً همیشه HTML/CSS/JS ساده بهترین مسیر است.', 'It is only a suggestion; for a first version plain HTML/CSS/JS is almost always the best path.'),
+      ] },
+      { k: 'h', t: L('ساخت برنامه وظایف', 'Generating the task plan') },
+      { k: 'ul', items: [
+        L('دکمه «ساخت برنامه وظایف» از روی صفحات معماری و قابلیت‌های سند، وظیفه‌های اولویت‌دار می‌سازد (فقط قابلیت‌ها؛ نه هدف و مخاطب).', 'The "generate task plan" button creates prioritised tasks from the architecture pages and the document\'s features (features only, not goal or audience).'),
+        L('اگر دوباره بسازید، وظیفه‌های انجام‌شده تیکشان را نگه می‌دارند و وظیفه‌های دستی شما دست‌نخورده می‌مانند.', 'If you regenerate, completed tasks stay ticked and your manual tasks are untouched.'),
+      ] },
+      { k: 'tip', t: L('اگر پروژه شما قبلاً فایل دارد، «قدم بعدی پیشنهادی» دیگر شما را به ساخت سند نیازمندی مجبور نمی‌کند.', 'If your project already has files, the "suggested next step" no longer forces you through the requirements document.') },
+      { k: 'action', id: 'goto:requirements', label: L('برو به نیازمندی‌ها', 'Go to Requirements') },
+      { k: 'action', id: 'goto:architecture', label: L('برو به معماری', 'Go to Architecture') },
     ],
   },
   {
