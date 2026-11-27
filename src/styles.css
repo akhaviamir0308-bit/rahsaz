@@ -212,3 +212,26 @@
 .onboard-actions{display:flex;flex-wrap:wrap;gap:10px}
 .preview-stage{border:1px solid var(--line);border-radius:14px;background:var(--panel3);padding:14px;direction:ltr;overflow:auto}
 [data-theme="light"] .ai-warn{background:#fef3c7;color:#78350f;border-color:#f59e0b}
+
+.files-folder-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px}
+.spin{animation:rahsaz-spin 1s linear infinite}@keyframes rahsaz-spin{to{transform:rotate(360deg)}}
+
+/* ── Three-layer navigation ── */
+.layered-nav .nav-group{margin-bottom:14px}
+.layered-nav .layer-label{
+  font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--accent);opacity:.85;padding:4px 12px 6px;margin-top:4px
+}
+.product-path-steps{
+  display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px
+}
+.path-step{
+  font-size:11px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);
+  color:var(--muted);background:var(--panel2)
+}
+.path-step.done{border-color:var(--green, #22c55e);color:var(--green, #22c55e);opacity:.9}
+.path-step.active{
+  border-color:var(--accent);color:var(--accent);background:color-mix(in srgb, var(--accent) 12%, transparent);
+  font-weight:700
+}
+.field-hint{line-height:1.5}

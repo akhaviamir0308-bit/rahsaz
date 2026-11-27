@@ -7,7 +7,7 @@ export type Language = 'fa' | 'en'
 export type Theme = 'dark' | 'light'
 
 /** Bump when persisted shape changes in a breaking way */
-export const DATA_SCHEMA_VERSION = 15
+export const DATA_SCHEMA_VERSION = 16
 
 export type ProjectType =
   | 'portfolio' | 'business' | 'store' | 'education'
@@ -18,6 +18,9 @@ export type ProjectStage =
   | 'development' | 'testing' | 'published'
 
 export type ProjectStatus = 'active' | 'archived' | 'completed'
+
+/** User skill level — drives which product layer is primary in the workspace */
+export type SkillLevel = 'beginner' | 'intermediate' | 'advanced'
 
 export type RequirementKind =
   | 'functional' | 'non_functional' | 'constraint' | 'open_question' | 'security'
@@ -163,15 +166,7 @@ export interface ActivityEntry {
 }
 
 /** Publish metadata stub for later phases */
-export interface DesignData {
-  pages: string[]
-  notes: string
-  confirmed: boolean
-  updatedAt: string
-}
-
 export interface PublishData {
-
   status: 'not_ready' | 'ready' | 'published'
   target?: string
   lastPublishedAt?: string
@@ -189,6 +184,8 @@ export interface Project {
   stage: ProjectStage
   status: ProjectStatus
   language?: Language
+  /** beginner | intermediate | advanced — controls primary product layer */
+  skillLevel?: SkillLevel
   /** data schema version at last save */
   schemaVersion?: number
   tasks?: Task[]
@@ -202,7 +199,6 @@ export interface Project {
   versions?: VersionsData
   activity?: ActivityEntry[]
   publish?: PublishData
-  design?: DesignData
 }
 
 export type StorageResult<T> =

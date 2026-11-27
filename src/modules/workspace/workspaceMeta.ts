@@ -6,7 +6,7 @@ import type { TranslationKeys } from '../../data/translations'
 
 export type WorkspaceTab =
   | 'learn' | 'overview' | 'discovery' | 'requirements' | 'architecture'
-  | 'design' | 'ai' | 'files' | 'preview' | 'versions' | 'publish' | 'tasks' | 'settings'
+  | 'ai' | 'files' | 'preview' | 'versions' | 'publish' | 'tasks' | 'settings'
 
 export function buildProjectContext(project: Project, t: TranslationKeys, isFa: boolean): string {
   const lines: string[] = []
@@ -83,7 +83,6 @@ export function buildPromptFromTemplate(
 export const QA_KEYS = ['qa_responsive', 'qa_content', 'qa_links', 'qa_images', 'qa_lang'] as const
 
 export const TAB_HELP: Record<string, { lesson: string; fa: string; en: string }> = {
-  design: { lesson: '', fa: 'صفحات و تجربه کاربری را قبل از کدنویسی مشخص کنید.', en: 'Define pages and UX before coding.' },
   discovery: { lesson: 't-discovery', fa: 'به ۸ سؤال کلیدی جواب بدهید (حداقل ۳ پاسخ برای تأیید). پاسخ‌ها خودکار وارد پرامپت‌های دستیار AI می‌شوند. «ذخیره» فقط ذخیره می‌کند؛ «تأیید» پروژه را به مرحله برنامه‌ریزی می‌برد.', en: 'Answer the 8 key questions (at least 3 to confirm). Answers flow into the AI assistant prompts. "Save" only saves; "Confirm" moves the project to Planning.' },
   ai: { lesson: 't-ai', fa: 'یک کارت انتخاب کنید ← پرامپت را کپی کنید ← در ChatGPT/Claude بچسبانید ← پاسخ را اینجا ذخیره کنید. راه‌ساز مستقیم به هوش مصنوعی وصل نیست؛ مسیر و حافظه کار را نگه می‌دارد.', en: 'Pick a card → copy the prompt → paste it in ChatGPT/Claude → save the answer here. Rahsaz is not directly connected to an AI; it keeps the path and memory of the work.' },
   files: { lesson: 't-files', fa: 'فایل index.html بسازید یا «ایجاد ساختار اولیه» را بزنید، کد AI را بچسبانید و Ctrl+S بزنید. فایل‌ها فقط متنی‌اند. «دفتر کنترل پروژه» سه فایل مستند می‌سازد.', en: 'Create index.html or click "Create starter structure", paste AI code and press Ctrl+S. Files are text only. "Project control log" creates three documentation files.' },

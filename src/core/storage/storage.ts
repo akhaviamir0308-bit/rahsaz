@@ -60,6 +60,9 @@ function migrateProject(p: any): Project {
     stage: p.stage || 'discovery',
     status: p.status || 'active',
     language: p.language === 'en' || p.language === 'fa' ? p.language : undefined,
+    skillLevel: p.skillLevel === 'beginner' || p.skillLevel === 'intermediate' || p.skillLevel === 'advanced'
+      ? p.skillLevel
+      : 'intermediate',
     tasks: Array.isArray(p.tasks) ? p.tasks.map(normalizeTask).filter(Boolean) as Task[] : [],
     discovery: normalizeDiscovery(p.discovery),
     requirements: normalizeRequirements(p.requirements),
@@ -69,7 +72,6 @@ function migrateProject(p: any): Project {
     qa: normalizeQa(p.qa),
     testReport: normalizeTestReport(p.testReport),
     versions: normalizeVersions(p.versions),
-    design: normalizeDesign(p.design),
     schemaVersion: typeof p.schemaVersion === 'number' ? p.schemaVersion : DATA_SCHEMA_VERSION,
     activity: Array.isArray(p.activity)
       ? p.activity.filter((a: any) => a && typeof a.id === 'string').map((a: any) => ({
@@ -245,18 +247,7 @@ function normalizeFiles(fd: any): FilesData | undefined {
   }
 }
 
-function normalizeDesign(d: any): import('../../shared/types').DesignData | undefined {
-  if (!d || typeof d !== 'object') return undefined
-  return {
-    pages: Array.isArray(d.pages) ? d.pages.filter((x: any) => typeof x === 'string') : [],
-    notes: typeof d.notes === 'string' ? d.notes : '',
-    confirmed: Boolean(d.confirmed),
-    updatedAt: typeof d.updatedAt === 'string' ? d.updatedAt : new Date().toISOString(),
-  }
-}
-
 function normalizeProject(p: any): Project | null {
-
   if (!p || typeof p !== 'object') return null
   if (typeof p.id !== 'string' || !p.id) return null
   if (typeof p.name !== 'string') return null
@@ -271,6 +262,9 @@ function normalizeProject(p: any): Project | null {
     stage: p.stage || 'discovery',
     status: p.status || 'active',
     language: p.language === 'en' || p.language === 'fa' ? p.language : undefined,
+    skillLevel: p.skillLevel === 'beginner' || p.skillLevel === 'intermediate' || p.skillLevel === 'advanced'
+      ? p.skillLevel
+      : 'intermediate',
     tasks: Array.isArray(p.tasks) ? p.tasks.map(normalizeTask).filter(Boolean) as Task[] : [],
     discovery: normalizeDiscovery(p.discovery),
     requirements: normalizeRequirements(p.requirements),
@@ -280,7 +274,6 @@ function normalizeProject(p: any): Project | null {
     qa: normalizeQa(p.qa),
     testReport: normalizeTestReport(p.testReport),
     versions: normalizeVersions(p.versions),
-    design: normalizeDesign(p.design),
     schemaVersion: typeof p.schemaVersion === 'number' ? p.schemaVersion : DATA_SCHEMA_VERSION,
     activity: Array.isArray(p.activity)
       ? p.activity.filter((a: any) => a && typeof a.id === 'string').map((a: any) => ({
@@ -333,7 +326,13 @@ function emptyFiles(): FilesData {
 }
 
 export function createProject(
-  input: { name: string; type: Project['type']; description?: string; language?: Project['language'] },
+  input: {
+    name: string
+    type: Project['type']
+    description?: string
+    language?: Project['language']
+    skillLevel?: Project['skillLevel']
+  },
   current: Project[]
 ): StorageResult<Project[]> {
   const name = input.name.trim()
@@ -349,6 +348,8 @@ export function createProject(
     stage: 'discovery',
     status: 'active',
     language: input.language,
+    skillLevel: input.skillLevel || 'intermediate',
+    schemaVersion: DATA_SCHEMA_VERSION,
     tasks: [],
     discovery: { answers: [], notes: '', confirmed: false, updatedAt: now },
     ai: { messages: [], updatedAt: now },
@@ -369,7 +370,7 @@ export function deleteProject(id: string, current: Project[]): StorageResult<Pro
 
 export function updateProject(
   id: string,
-  patch: Partial<Pick<Project, 'name' | 'description' | 'type' | 'stage' | 'status' | 'language' | 'tasks' | 'discovery' | 'requirements' | 'architecture' | 'ai' | 'files' | 'qa' | 'testReport' | 'versions' | 'design' | 'publish' | 'activity'>>,
+  patch: Partial<Pick<Project, 'name' | 'description' | 'type' | 'stage' | 'status' | 'language' | 'skillLevel' | 'tasks' | 'discovery' | 'requirements' | 'architecture' | 'ai' | 'files' | 'qa' | 'testReport' | 'versions'>>,
   current: Project[]
 ): StorageResult<Project[]> {
   const index = current.findIndex((p) => p.id === id)
@@ -388,9 +389,6 @@ export function updateProject(
   if (patch.qa !== undefined) updated.qa = patch.qa
   if (patch.testReport !== undefined) updated.testReport = patch.testReport
   if (patch.versions !== undefined) updated.versions = patch.versions
-  if (patch.design !== undefined) updated.design = patch.design
-  if (patch.publish !== undefined) updated.publish = patch.publish
-  if (patch.activity !== undefined) updated.activity = patch.activity
   const next = [...current]
   next[index] = updated
   const saveResult = saveProjects(next)
