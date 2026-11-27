@@ -93,6 +93,14 @@ export interface ArchitectureData {
   risks?: string[]
 }
 
+/** Optional UI/UX design notes (used by guidance engine; full design module later) */
+export interface DesignData {
+  pages: string[]
+  confirmed: boolean
+  updatedAt: string
+  notes?: string
+}
+
 export interface AiMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
@@ -192,6 +200,7 @@ export interface Project {
   discovery?: DiscoveryData
   requirements?: RequirementsData
   architecture?: ArchitectureData
+  design?: DesignData
   ai?: AiData
   files?: FilesData
   qa?: QaData

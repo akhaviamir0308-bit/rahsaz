@@ -8,7 +8,7 @@ import { uid } from '../uid'
 import type {
   Project, StorageResult, Task, DiscoveryData, AiData, AiMessage, FilesData, ProjectFile, QaData,
   TestReport, VersionsData, VersionSnapshot, TestCheck,
-  RequirementsData, RequirementItem, ArchitectureData, ActivityEntry, PublishData,
+  RequirementsData, RequirementItem, ArchitectureData, ActivityEntry, PublishData, DesignData,
 } from '../../shared/types'
 import { DATA_SCHEMA_VERSION } from '../../shared/types'
 import { idbLoadProjects, idbSaveProjects } from './idb'
@@ -48,6 +48,17 @@ function readRaw(): unknown {
   }
 }
 
+
+function normalizeDesign(d: any): DesignData | undefined {
+  if (!d || typeof d !== 'object') return undefined
+  return {
+    pages: Array.isArray(d.pages) ? d.pages.filter((x: any) => typeof x === 'string') : [],
+    confirmed: Boolean(d.confirmed),
+    updatedAt: typeof d.updatedAt === 'string' ? d.updatedAt : new Date().toISOString(),
+    notes: typeof d.notes === 'string' ? d.notes : undefined,
+  }
+}
+
 function migrateProject(p: any): Project {
   const now = new Date().toISOString()
   return {
@@ -67,6 +78,7 @@ function migrateProject(p: any): Project {
     discovery: normalizeDiscovery(p.discovery),
     requirements: normalizeRequirements(p.requirements),
     architecture: normalizeArchitecture(p.architecture),
+    design: normalizeDesign(p.design),
     ai: normalizeAi(p.ai),
     files: normalizeFiles(p.files),
     qa: normalizeQa(p.qa),
@@ -269,6 +281,7 @@ function normalizeProject(p: any): Project | null {
     discovery: normalizeDiscovery(p.discovery),
     requirements: normalizeRequirements(p.requirements),
     architecture: normalizeArchitecture(p.architecture),
+    design: normalizeDesign(p.design),
     ai: normalizeAi(p.ai),
     files: normalizeFiles(p.files),
     qa: normalizeQa(p.qa),
